@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#183d39" />
+    <meta name="description" content="Bánh Mì Phố — dựng xe, làm bánh và gây dựng thương hiệu giữa lòng Sài Gòn." />
+    <title>Bánh Mì Phố</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">🥖</span>
+          <div>
+            <p class="eyebrow">TYCOON PHỐ SÀI GÒN</p>
+            <h1>Bánh Mì Phố</h1>
+          </div>
+        </div>
+        <div class="wallet-row" aria-label="Tài sản cửa hàng">
+          <div class="wallet-pill"><span>🪙</span><strong id="coins">0</strong><small>xu</small></div>
+          <div class="wallet-pill reputation-pill"><span>⭐</span><strong id="reputation">0</strong><small>tiếng</small></div>
+          <button class="fullscreen-button" data-action="fullscreen" aria-label="Bật toàn màn hình" title="Toàn màn hình">⛶</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="street-section" aria-label="Phố bán bánh mì">
+          <div class="street-caption">
+            <div>
+              <span class="live-dot"></span>
+              <strong id="street-status">Góc phố thân quen</strong>
+            </div>
+          <span id="weather-label">☀️ Nắng nhẹ · Sài Gòn</span>
+            <span class="queue-badge">HÀNG <b id="queue-count">0</b></span>
+          </div>
+          <div id="phaser-root" class="game-canvas" aria-label="Cảnh phố trong game"></div>
+          <span class="visually-hidden" id="customer-callout">Xe đang nghỉ — chuẩn bị hàng rồi mở ca nhé.</span>
+        </section>
+
+        <section class="play-panel" aria-label="Bán bánh mì">
+          <div class="order-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ĐƠN ĐANG CHỜ</p>
+                <h2 id="order-title">Chưa có khách</h2>
+              </div>
+              <div class="shift-clock" id="shift-clock">CA ĐÃ ĐÓNG</div>
+            </div>
+            <p id="order-hint" class="order-hint">Mở ca để khách ghé xe. Làm đúng thứ tự nguyên liệu để nhận tiền boa và danh tiếng.</p>
+            <div id="order-steps" class="order-steps" aria-live="polite"></div>
+
+            <div class="ingredient-grid" role="group" aria-label="Chọn nguyên liệu theo thứ tự">
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="bread"><span>🥖</span><b>Bánh mì</b><small id="stock-bread">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="pate"><span>🫙</span><b>Pate</b><small id="stock-pate">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="cha"><span>🍖</span><b>Chả</b><small id="stock-cha">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="egg"><span>🍳</span><b>Trứng</b><small id="stock-egg">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="greens"><span>🥒</span><b>Rau dưa</b><small id="stock-greens">0</small></button>
+            </div>
+            <div class="feedback-line" id="feedback" aria-live="polite">Nhớ thêm rau dưa trước khi giao bánh nhé!</div>
+          </div>
+
+          <div class="business-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">GÓC QUẢN LÝ</p>
+                <h2>Nâng cấp quán</h2>
+              </div>
+              <span class="level-pill" id="cart-level" title="Xe đẩy thừa kế">CẤP 1 / 12</span>
+            </div>
+            <div class="business-actions">
+              <button class="primary-action" id="shift-button" data-action="toggle-shift">Mở ca bán · 2 phút</button>
+              <button class="management-action" data-action="restock"><span>📦 Nhập hàng</span><small id="restock-cost">75 xu · +5 mỗi món</small></button>
+              <button class="management-action" data-action="upgrade"><span id="upgrade-label">🏠 Nâng quán</span><small id="upgrade-cost">300 xu</small></button>
+              <button class="management-action" id="hire-button" data-action="hire"><span>🧑‍🍳 Thuê phụ bếp</span><small id="hire-cost">1.200 xu · cần xe cấp 2</small></button>
+            </div>
+            <p class="business-note" id="business-note">Bán bánh để dành tiền nâng cấp. Có phụ bếp, xe mới tự bán khi bạn rời game.</p>
+          </div>
+        </section>
+      </main>
+
+      <section class="report-modal" id="shift-report" hidden aria-live="polite">
+        <div class="report-card">
+          <p class="eyebrow">TỔNG KẾT CA</p>
+          <h2>Phố mình hôm nay</h2>
+          <div id="report-details" class="report-details"></div>
+          <button class="primary-action" data-action="dismiss-report">Đóng sổ, mai bán tiếp</button>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
