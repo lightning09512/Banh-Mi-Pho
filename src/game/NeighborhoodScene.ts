@@ -410,6 +410,8 @@ const WEATHER_FRAMES = {
   ],
 } as const;
 
+const WALKER_LANE_RATIOS = [0.725, 0.795] as const;
+
 const DAY_NIGHT_FRAMES = {
   sun: [327, 117, 128, 136],
   sunset: [1305, 163, 145, 73],
@@ -429,6 +431,7 @@ type Walker = {
   shadow: Phaser.GameObjects.Image;
   active: boolean;
   direction: -1 | 1;
+  lane: 0 | 1;
   speed: number;
   size: number;
   width: number;
@@ -1656,7 +1659,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       const viewportLeft = camera.scrollX;
       const viewportRight = viewportLeft + this.getLogicalWidth();
       const isPet = walker.textureKey === "walk-street-cat" || walker.textureKey === "walk-street-dog";
-      const laneOffset = Math.sin(index * 1.9) * 3 * this.unit;
+      const laneY = this.getWalkerLaneY(walker.lane) + Math.sin(index * 1.9) * 2 * this.unit;
       if (isPet) {
         if (walker.petMode === "paused" && _time >= (walker.petPauseUntil ?? 0)) {
           this.resumePet(walker, _time, index);
@@ -1665,16 +1668,16 @@ export class NeighborhoodScene extends Phaser.Scene {
           this.startPetPause(walker, _time);
         }
         if (walker.petMode === "paused") {
-          walker.sprite.y = this.groundY + laneOffset;
+          walker.sprite.y = laneY;
           walker.sprite.setDepth(getAmbientWalkerDepth(walker.textureKey, walker.sprite.y, this.unit));
-          walker.shadow.setPosition(walker.sprite.x, this.groundY + laneOffset + 2 * this.unit);
+          walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit);
           continue;
         }
       }
       walker.sprite.x += walker.direction * walker.speed * elapsed;
-      // Keep the pelvis and foot contact on a stable lane; the walk frames provide
+      // Keep each walker on one of two sidewalk lanes; the walk frames provide
       // the leg motion, so an extra high-frequency bob only makes sprites jitter.
-      walker.sprite.y = this.groundY + laneOffset;
+      walker.sprite.y = laneY;
       walker.sprite.setDepth(getAmbientWalkerDepth(walker.textureKey, walker.sprite.y, this.unit));
       const leftViewport = walker.direction < 0 && walker.sprite.x < viewportLeft - 60 * this.unit;
       const rightViewport = walker.direction > 0 && walker.sprite.x > viewportRight + 60 * this.unit;
@@ -1689,7 +1692,7 @@ export class NeighborhoodScene extends Phaser.Scene {
         );
         continue;
       }
-      walker.shadow.setPosition(walker.sprite.x, this.groundY + laneOffset + 2 * this.unit);
+      walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit);
     }
 
     this.updateStreetDiners(delta);
@@ -1718,11 +1721,12 @@ export class NeighborhoodScene extends Phaser.Scene {
           walker.petNextPauseAt = _time + 5_500 + (walkerIndex % 2) * 4_000;
           walker.petPauseUntil = undefined;
         }
-        walker.sprite.setPosition(spawnX, this.groundY)
+        const laneY = this.getWalkerLaneY(walker.lane);
+        walker.sprite.setPosition(spawnX, laneY)
           .setAlpha(0.96 + (walkerIndex % 3) * 0.02)
           .setVisible(true)
           .play(animation);
-        walker.shadow.setPosition(spawnX, this.groundY + 2 * this.unit).setVisible(true);
+        walker.shadow.setPosition(spawnX, laneY + 1.5 * this.unit).setVisible(true);
         this.ambientWalkerSpawnCooldownMs = 900 + ((walkerIndex * 197) % 500);
       }
     }
@@ -1857,6 +1861,8 @@ export class NeighborhoodScene extends Phaser.Scene {
         : textureKey === "walk-street-dog"
           ? -1
           : directions[index % directions.length];
+      const lane: 0 | 1 = direction > 0 ? 0 : 1;
+      const laneY = this.getWalkerLaneY(lane);
       const isPet = textureKey === "walk-street-cat" || textureKey === "walk-street-dog";
       const size = isPet
         ? (0.88 + ((index * 3) % 5) * 0.07) * 0.92
@@ -1873,12 +1879,12 @@ export class NeighborhoodScene extends Phaser.Scene {
           : ((index % MAX_ACTIVE_AMBIENT_WALKERS) + 0.5) / MAX_ACTIVE_AMBIENT_WALKERS;
       const animationKey = `${textureKey}-${direction > 0 ? "right" : "left"}`;
       const active = this.walkers.reduce((count, walker) => count + Number(walker.active), 0) < MAX_ACTIVE_AMBIENT_WALKERS;
-      const shadow = this.add.image(positionRatio * width, 0, "character-contact-shadow-soft")
+      const shadow = this.add.image(positionRatio * width, laneY + 1.5 * this.unit, "character-contact-shadow-soft")
         .setOrigin(0.5)
         .setDepth(3.59)
         .setAlpha(isPet ? 0.34 : 0.56)
         .setVisible(active);
-      const sprite = this.add.sprite(positionRatio * width, 0, textureKey, getWalkerStartFrame(textureKey, direction))
+      const sprite = this.add.sprite(positionRatio * width, laneY, textureKey, getWalkerStartFrame(textureKey, direction))
         .setOrigin(0.5, getWalkerOriginY(textureKey))
         .setDepth(getAmbientWalkerDepth(textureKey, 0, this.unit))
         .setAlpha(0.96 + (index % 3) * 0.02)
@@ -1891,6 +1897,7 @@ export class NeighborhoodScene extends Phaser.Scene {
         sprite,
         active,
         direction,
+        lane,
         speed: getAmbientWalkerSpeed(index, textureKey, this.unit),
         size,
         ...footprint,
@@ -1900,6 +1907,10 @@ export class NeighborhoodScene extends Phaser.Scene {
         petPauseCycle: isPet ? index % 4 : undefined,
       });
     }
+  }
+
+  private getWalkerLaneY(lane: 0 | 1): number {
+    return this.mapTop + this.mapHeight * WALKER_LANE_RATIOS[lane];
   }
 
   private createCharacterShadowTexture(): void {
@@ -2475,11 +2486,11 @@ export class NeighborhoodScene extends Phaser.Scene {
 
     this.walkers.forEach((walker, index) => {
       walker.speed = getAmbientWalkerSpeed(index, walker.textureKey, unit);
-      const laneOffset = Math.sin(index * 1.9) * 3 * unit;
-      walker.shadow.setPosition(walker.sprite.x, groundY + laneOffset + 1.5 * unit)
+      const laneY = mapTop + mapHeight * WALKER_LANE_RATIOS[walker.lane] + Math.sin(index * 1.9) * 2 * unit;
+      walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * unit)
         .setDisplaySize(walker.shadowWidth * walker.size * unit, walker.shadowHeight * walker.size * unit)
         .setVisible(walker.active);
-      walker.sprite.setPosition(walker.sprite.x, groundY + laneOffset)
+      walker.sprite.setPosition(walker.sprite.x, laneY)
         .setDisplaySize(walker.width * walker.size * unit, walker.height * walker.size * unit)
         .setVisible(walker.active);
     });
