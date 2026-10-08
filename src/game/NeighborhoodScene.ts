@@ -671,14 +671,49 @@ export class NeighborhoodScene extends Phaser.Scene {
   private mapTop = 0;
   private mapHeight = 0;
   private maxPanX = 0;
-  private dragStart?: { x: number; scrollX: number };
+  private dragStart?: { x: number; scrollX: number; pointerId: number };
   private dragMoved = false;
+  private dragSurface?: HTMLElement;
   private gradeSignature = "";
   private environmentElapsedMs = 0;
   private lastEnvironmentUiAt = 0;
   private debugTimeOfDay: "dawn" | "day" | "sunset" | "night" | null = null;
   private debugWeather: "clear" | "cloudy" | "rain" | null = null;
   private lastSnapshot!: GameSnapshot;
+
+  private readonly onMapPointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target instanceof Element && event.target.closest("button, a, input, select, textarea, summary, [role='button']")) return;
+
+    this.dragStart = {
+      x: event.clientX,
+      scrollX: this.cameras.main.scrollX,
+      pointerId: event.pointerId,
+    };
+    this.dragMoved = false;
+    try {
+      this.dragSurface?.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the pointer was canceled during a resize.
+    }
+  };
+
+  private readonly onMapPointerMove = (event: PointerEvent): void => {
+    const dragStart = this.dragStart;
+    if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+
+    const deltaX = event.clientX - dragStart.x;
+    if (!this.dragMoved && Math.abs(deltaX) < 5) return;
+    this.dragMoved = true;
+    this.cameras.main.setScroll(
+      Phaser.Math.Clamp(dragStart.scrollX - deltaX, 0, this.maxPanX),
+      this.cameras.main.scrollY,
+    );
+  };
+
+  private readonly onMapPointerUp = (event: PointerEvent): void => {
+    if (this.dragStart?.pointerId === event.pointerId) this.dragStart = undefined;
+  };
 
   constructor(store: GameStore) {
     super("neighborhood");
@@ -829,20 +864,21 @@ export class NeighborhoodScene extends Phaser.Scene {
     this.createAmbientWalkers(0, CORE_WALKER_COUNT);
     this.loadBackgroundWalkerAssets();
     this.createLivingEnvironment();
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      this.dragStart = { x: pointer.x / this.devicePixelRatio, scrollX: this.cameras.main.scrollX };
-      this.dragMoved = false;
+    this.dragSurface = this.game.canvas.parentElement?.parentElement ?? undefined;
+    this.dragSurface?.addEventListener("pointerdown", this.onMapPointerDown);
+    this.dragSurface?.addEventListener("pointermove", this.onMapPointerMove);
+    this.dragSurface?.addEventListener("pointerup", this.onMapPointerUp);
+    this.dragSurface?.addEventListener("pointercancel", this.onMapPointerUp);
+    this.dragSurface?.addEventListener("lostpointercapture", this.onMapPointerUp);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.dragSurface?.removeEventListener("pointerdown", this.onMapPointerDown);
+      this.dragSurface?.removeEventListener("pointermove", this.onMapPointerMove);
+      this.dragSurface?.removeEventListener("pointerup", this.onMapPointerUp);
+      this.dragSurface?.removeEventListener("pointercancel", this.onMapPointerUp);
+      this.dragSurface?.removeEventListener("lostpointercapture", this.onMapPointerUp);
+      this.dragSurface = undefined;
+      this.dragStart = undefined;
     });
-    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.dragStart || !pointer.isDown) return;
-      const deltaX = pointer.x / this.devicePixelRatio - this.dragStart.x;
-      if (!this.dragMoved && Math.abs(deltaX) < 5) return;
-      this.dragMoved = true;
-      this.cameras.main.setScroll(Phaser.Math.Clamp(this.dragStart.scrollX - deltaX, 0, this.maxPanX), 0);
-    });
-    const stopPan = () => { this.dragStart = undefined; };
-    this.input.on("pointerup", stopPan);
-    this.input.on("pointerupoutside", stopPan);
     if (this.shopDebugEnabled) {
       this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
         if (event.key === "[") this.setShopStage(this.shopStage - 1);
