@@ -1,6 +1,6 @@
-# Bánh Mì Phố
+# Alley Grill Tycoon (Quán Nhậu Hẻm)
 
-Bản prototype game quản lý xe bánh mì ở phố Sài Gòn, dùng Phaser 4, TypeScript và Vite.
+Bản prototype game quản lý quán nhậu ở phố Sài Gòn, dùng Phaser 4, TypeScript và Vite.
 
 ## Chạy trên máy
 
@@ -11,8 +11,8 @@ npm run dev
 
 ## Vòng chơi hiện có
 
-- Mở ca 2 phút, đón khách và ráp bánh theo thứ tự nguyên liệu.
-- Kiếm xu, danh tiếng và tiền boa; nhập hàng, nâng xe, thuê phụ bếp.
+- Mở ca 2 phút, đón khách và chế biến món theo thứ tự nguyên liệu.
+- Kiếm xu, danh tiếng và tiền boa; nhập hàng, nâng quán, thuê phụ bếp.
 - Lưu tiến trình trên thiết bị; phụ bếp tạo thu nhập ngoại tuyến có giới hạn.
 - Dùng map phố hiện có làm nền; cảnh tối dần về cuối ca.
 

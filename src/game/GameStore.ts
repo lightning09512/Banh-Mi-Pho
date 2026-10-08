@@ -42,6 +42,7 @@ export interface ShiftReport {
 }
 
 export interface GameSnapshot {
+  storeName: string;
   coins: number;
   reputation: number;
   cartLevel: number;
@@ -62,6 +63,7 @@ export interface GameSnapshot {
 
 interface SavedGame {
   version: 1;
+  storeName?: string;
   coins: number;
   reputation: number;
   cartLevel: number;
@@ -72,8 +74,14 @@ interface SavedGame {
 }
 
 const SAVE_KEY = "banh-mi-pho-save-v1";
+const STORE_NAME_MAX_LENGTH = 24;
+
+function normalizeStoreName(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, STORE_NAME_MAX_LENGTH);
+}
 
 export class GameStore {
+  private storeName = "";
   private coins = 100;
   private reputation = 0;
   private cartLevel = 1;
@@ -116,6 +124,7 @@ export class GameStore {
       : 0;
 
     return {
+      storeName: this.storeName,
       coins: this.coins,
       reputation: this.reputation,
       cartLevel: this.cartLevel,
@@ -135,6 +144,16 @@ export class GameStore {
     };
   }
 
+  setStoreName(value: string): boolean {
+    const storeName = normalizeStoreName(value);
+    if (!storeName) return false;
+    this.storeName = storeName;
+    this.feedback = `Đã treo biển hiệu “${storeName}”.`;
+    this.persist();
+    this.publish();
+    return true;
+  }
+
   startShift(): void {
     if (this.inShift) return;
     this.offlineNotice = "";
@@ -152,7 +171,7 @@ export class GameStore {
     this.arrivalClock = 0;
     this.staffClock = 0;
     this.report = null;
-    this.feedback = "Khách đầu tiên đang đi bộ tới xe. Chờ bạn ấy tới rồi bắt đầu làm bánh nhé!";
+    this.feedback = "Khách đầu tiên đang đi bộ tới quán. Chờ bạn ấy tới rồi bắt đầu chế biến món nhé!";
     this.persist();
     this.publish();
   }
@@ -166,7 +185,7 @@ export class GameStore {
   tapIngredient(ingredientId: IngredientId): void {
     this.offlineNotice = "";
     if (!this.inShift) {
-      this.feedback = "Mở ca bán trước rồi mình mới ráp bánh được nhé.";
+      this.feedback = "Mở ca trước rồi mình mới chế biến món được nhé.";
       this.publish();
       return;
     }
@@ -178,7 +197,7 @@ export class GameStore {
       return;
     }
     if (customer.status !== "waiting") {
-      this.feedback = "Khách đang đi bộ tới quầy; đợi bạn ấy tới rồi ráp bánh nhé.";
+      this.feedback = "Khách đang đi bộ tới quán; đợi bạn ấy tới rồi chế biến món nhé.";
       this.publish();
       return;
     }
@@ -194,7 +213,7 @@ export class GameStore {
     const expectedIngredient = recipe.ingredients[this.assembly.length];
     if (ingredientId !== expectedIngredient) {
       const expectedName = INGREDIENTS.find((item) => item.id === expectedIngredient)?.name ?? "nguyên liệu kế tiếp";
-      this.feedback = `Khách đang chờ ${expectedName}. Chọn đúng thứ tự để hoàn thành bánh nhé.`;
+      this.feedback = `Khách đang chờ ${expectedName}. Chọn đúng thứ tự để hoàn thành món nhé.`;
       this.publish();
       return;
     }
@@ -223,7 +242,7 @@ export class GameStore {
     const customer = this.customers.find((entry) => entry.id === customerId);
     if (!customer || customer.status === "waiting") return;
     customer.status = "waiting";
-    this.feedback = "Khách đã tới quầy. Ráp bánh theo đơn nhé!";
+    this.feedback = "Khách đã tới quán. Hoàn thiện món theo đơn nhé!";
     this.publish();
   }
 
@@ -269,7 +288,7 @@ export class GameStore {
     this.coins -= cost;
     this.cartLevel += 1;
     this.feedback = this.cartLevel === 2
-      ? "Xe mới có bếp than và mặt quầy rộng hơn. Món đặc biệt đã mở!"
+      ? "Quán có bếp nướng mới và mặt quầy rộng hơn. Món đặc biệt đã mở!"
       : `Đã mở khóa ${BUSINESS_STAGE_NAMES[this.cartLevel - 1]}.`;
     this.persist();
     this.publish();
@@ -288,7 +307,7 @@ export class GameStore {
       return;
     }
     if (this.hasStaff) {
-      this.feedback = "Phụ bếp đang phụ mình trông xe rồi!";
+      this.feedback = "Phụ bếp đang phụ mình trông quán rồi!";
       this.publish();
       return;
     }
@@ -300,7 +319,7 @@ export class GameStore {
 
     this.coins -= STAFF_HIRE_COST;
     this.hasStaff = true;
-    this.feedback = "Đã thuê phụ bếp! Bạn ấy sẽ tự phục vụ khách và giúp xe có thu nhập ngoại tuyến.";
+    this.feedback = "Đã thuê phụ bếp! Bạn ấy sẽ tự phục vụ khách và giúp quán có thu nhập ngoại tuyến.";
     this.persist();
     this.publish();
   }
@@ -406,7 +425,7 @@ export class GameStore {
     const guestName = CUSTOMER_TYPES[customer.type].name.toLowerCase();
     this.feedback = byStaff
       ? `Phụ bếp giao ${recipe.name.toLowerCase()} cho ${guestName}. Lãi đơn: ${recipe.salePrice - ingredientCost} xu.`
-      : `Giao bánh thành công! +${recipe.salePrice - ingredientCost + tip} xu${tip > 0 ? ` (có ${tip} xu boa)` : ""}.`;
+      : `Phục vụ món thành công! +${recipe.salePrice - ingredientCost + tip} xu${tip > 0 ? ` (có ${tip} xu boa)` : ""}.`;
     this.persist();
     this.publish();
   }
@@ -441,6 +460,7 @@ export class GameStore {
       const saved = JSON.parse(raw) as SavedGame;
       if (saved.version !== 1) return;
 
+      this.storeName = typeof saved.storeName === "string" ? normalizeStoreName(saved.storeName) : "";
       this.coins = Math.max(0, saved.coins);
       this.reputation = Math.max(0, saved.reputation);
       this.cartLevel = Math.max(1, Math.min(MAX_CART_LEVEL, saved.cartLevel));
@@ -469,6 +489,7 @@ export class GameStore {
     this.lastPersistAt = Date.now();
     const saved: SavedGame = {
       version: 1,
+      storeName: this.storeName,
       coins: this.coins,
       reputation: this.reputation,
       cartLevel: this.cartLevel,

@@ -1,9 +1,11 @@
+import { SHOP_STAGES } from "../config/shopStages";
+
 export const INGREDIENTS = [
-  { id: "bread", name: "Bánh mì", icon: "🥖", unitCost: 4 },
-  { id: "pate", name: "Pate", icon: "🫙", unitCost: 2 },
-  { id: "cha", name: "Chả lụa", icon: "🍖", unitCost: 4 },
-  { id: "egg", name: "Trứng", icon: "🍳", unitCost: 3 },
-  { id: "greens", name: "Rau dưa", icon: "🥒", unitCost: 2 },
+  { id: "bread", name: "Bắp nướng", icon: "🌽", unitCost: 4 },
+  { id: "pate", name: "Sốt ướp", icon: "🫙", unitCost: 2 },
+  { id: "cha", name: "Ba chỉ nướng", icon: "🥩", unitCost: 4 },
+  { id: "egg", name: "Trứng nướng", icon: "🍳", unitCost: 3 },
+  { id: "greens", name: "Rau ăn kèm", icon: "🥬", unitCost: 2 },
 ] as const;
 
 export type IngredientId = (typeof INGREDIENTS)[number]["id"];
@@ -12,21 +14,21 @@ export type Inventory = Record<IngredientId, number>;
 export const RECIPES = {
   cha: {
     id: "cha",
-    name: "Bánh mì chả",
+    name: "Xiên ba chỉ nướng",
     salePrice: 30,
     ingredients: ["bread", "pate", "cha", "greens"],
     unlockLevel: 1,
   },
   egg: {
     id: "egg",
-    name: "Bánh mì trứng",
+    name: "Trứng nướng mỡ hành",
     salePrice: 32,
     ingredients: ["bread", "pate", "egg", "greens"],
     unlockLevel: 1,
   },
   special: {
     id: "special",
-    name: "Bánh mì đặc biệt",
+    name: "Mẹt nướng đặc biệt",
     salePrice: 42,
     ingredients: ["bread", "pate", "cha", "egg", "greens"],
     unlockLevel: 2,
@@ -60,20 +62,7 @@ export const OFFLINE_CAP_MINUTES = 4 * 60;
 export const OFFLINE_COINS_PER_MINUTE = 8;
 
 export const MAX_CART_LEVEL = 12;
-export const BUSINESS_STAGE_NAMES = [
-  "Xe đẩy thừa kế",
-  "Xe có mái che và bếp than",
-  "Quầy bánh mì hai trạm",
-  "Kiosk bán bánh và nước",
-  "Tiệm bánh mì mặt phố",
-  "Tiệm bánh mì kiêm cà phê",
-  "Quán ăn gia đình hai tầng",
-  "Nhà hàng khu phố",
-  "Quán món ngon Sài Gòn",
-  "Nhà hàng flagship ba gian",
-  "Bếp bánh và xưởng sản xuất",
-  "Thương hiệu Bánh Mì Phố",
-] as const;
+export const BUSINESS_STAGE_NAMES = SHOP_STAGES.map((stage) => stage.name);
 
 export const CART_UPGRADE_COST: Record<number, number> = {
   1: 300,
@@ -100,3 +89,4 @@ export function getRecipeCost(recipeId: RecipeId): number {
     return total + (ingredient?.unitCost ?? 0);
   }, 0);
 }
+
