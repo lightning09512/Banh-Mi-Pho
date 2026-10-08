@@ -2364,7 +2364,7 @@ export class NeighborhoodScene extends Phaser.Scene {
     // continuous 3:1 street panorama that can be explored with a horizontal drag.
     const mapHeight = portrait
       ? Math.min(height * 0.78, width * 1.45)
-      : Math.min(height * 0.88, width / 2.1);
+      : height;
     const mapWidth = mapHeight * 3;
     const mapTop = (height - mapHeight) / 2;
     // Place character feet on the lower half of the map's tiled sidewalk, above the curb.
