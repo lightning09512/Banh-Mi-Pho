@@ -1,6 +1,16 @@
 import { GAME_NAME_VI } from "./game";
 import shopStage01Url from "../../assets/business-upgrades/shop_01.png";
 import shopStage02Url from "../../assets/business-upgrades/shop_02.png";
+import shopStage03Url from "../../assets/business-upgrades/shop_03.png";
+import shopStage04Url from "../../assets/business-upgrades/shop_04.png";
+import shopStage05Url from "../../assets/business-upgrades/shop_05.png";
+import shopStage06Url from "../../assets/business-upgrades/shop_06.png";
+import shopStage07Url from "../../assets/business-upgrades/shop_07.png";
+import shopStage08Url from "../../assets/business-upgrades/shop_08.png";
+import shopStage09Url from "../../assets/business-upgrades/shop_09.png";
+import shopStage10Url from "../../assets/business-upgrades/shop_10.png";
+import shopStage11Url from "../../assets/business-upgrades/shop_11.png";
+import shopStage12Url from "../../assets/business-upgrades/shop_12.png";
 
 export const SHOP_BASE_SIZE = { width: 2_172, height: 724 } as const;
 
@@ -33,13 +43,13 @@ const stageNames = [
   `Thương hiệu ${GAME_NAME_VI}`,
 ] as const;
 
-// Stages 1 and 2 use full-facade replacement artwork; later overlays are still pending.
+// All 12 stages use full-facade replacement artwork.
 export const SHOP_STAGES: readonly ShopStage[] = stageNames.map((name, index) => {
   const id = index + 1;
-  const filename = `shop_${String(id).padStart(2, "0")}.${id <= 2 ? "png" : "webp"}`;
+  const filename = `shop_${String(id).padStart(2, "0")}.png`;
   return {
     id,
-    image: id === 1 ? shopStage01Url : id === 2 ? shopStage02Url : null,
+    image: id === 1 ? shopStage01Url : id === 2 ? shopStage02Url : id === 3 ? shopStage03Url : id === 4 ? shopStage04Url : id === 5 ? shopStage05Url : id === 6 ? shopStage06Url : id === 7 ? shopStage07Url : id === 8 ? shopStage08Url : id === 9 ? shopStage09Url : id === 10 ? shopStage10Url : id === 11 ? shopStage11Url : shopStage12Url,
     filename,
     name,
     price: undefined,
