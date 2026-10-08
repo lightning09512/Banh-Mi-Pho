@@ -31,14 +31,13 @@ const stageNames = [
   `Thương hiệu ${GAME_NAME_VI}`,
 ] as const;
 
-// Art files are not in the repository yet. Keep their expected names here and
-// render numbered placeholders until real 860 × 520 overlays are supplied.
+// Stage 1 is supplied as PNG; the remaining stage overlays are still pending.
 export const SHOP_STAGES: readonly ShopStage[] = stageNames.map((name, index) => {
   const id = index + 1;
-  const filename = `shop_${String(id).padStart(2, "0")}.webp`;
+  const filename = `shop_${String(id).padStart(2, "0")}.${id === 1 ? "png" : "webp"}`;
   return {
     id,
-    image: null,
+    image: id === 1 ? `${SHOP_STAGE_ASSET_DIRECTORY}/${filename}` : null,
     filename,
     name,
     price: undefined,
