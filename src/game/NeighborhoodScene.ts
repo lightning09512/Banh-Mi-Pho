@@ -2359,6 +2359,9 @@ export class NeighborhoodScene extends Phaser.Scene {
 
     const width = this.getLogicalWidth();
     const height = this.getLogicalHeight();
+    const previousMapWidth = this.mapWidth;
+    const previousMapHeight = this.mapHeight;
+    const previousMapTop = this.mapTop;
     const portrait = width / height < 0.85;
     // Keep the storefront large enough to read on phones while preserving a
     // continuous 3:1 street panorama that can be explored with a horizontal drag.
@@ -2427,7 +2430,11 @@ export class NeighborhoodScene extends Phaser.Scene {
     }
     this.transitionShopStage(stage, this.shopStage > 0);
 
-    const resized = width !== this.layoutWidth || height !== this.layoutHeight;
+    const resized = width !== this.layoutWidth
+      || height !== this.layoutHeight
+      || mapWidth !== previousMapWidth
+      || mapHeight !== previousMapHeight
+      || mapTop !== previousMapTop;
     if (resized) {
       const oldCenterX = this.layoutWidth ? this.cameras.main.scrollX + this.layoutWidth / 2 : mapWidth / 2;
       this.layoutWidth = width;
