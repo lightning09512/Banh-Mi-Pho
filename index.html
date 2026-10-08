@@ -50,12 +50,16 @@
       <main>
         <section class="street-section" aria-label="Phố có quán nhậu">
           <div id="phaser-root" class="game-canvas" aria-label="Cảnh phố trong game, kéo ngang để xem thêm"></div>
+          <div class="map-pan-controls" aria-label="Điều hướng con phố">
+            <button type="button" data-map-pan="-1" aria-label="Xem phần phố bên trái">‹</button>
+            <button type="button" data-map-pan="1" aria-label="Xem phần phố bên phải">›</button>
+          </div>
           <div class="street-caption" aria-live="polite">
             <span class="live-status"><span class="live-dot"></span><strong id="street-status">Góc phố thân quen</strong></span>
             <span id="weather-label">☀️ Nắng nhẹ · Sài Gòn</span>
             <span class="queue-badge">HÀNG <b id="queue-count">0</b></span>
           </div>
-          <div class="map-hint" id="map-hint"><span>↔</span> Vuốt để xem cả con phố</div>
+          <div class="map-hint" id="map-hint"><span>↔</span> Vuốt hoặc bấm mũi tên để xem cả con phố</div>
           <p class="visually-hidden" id="customer-callout">Quán đang nghỉ — chuẩn bị hàng rồi mở ca nhé.</p>
         </section>
 

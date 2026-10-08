@@ -1,10 +1,12 @@
 import { GAME_NAME_VI } from "./game";
+import shopStage01Url from "../../assets/business-upgrades/shop_01.png";
+import shopStage02Url from "../../assets/business-upgrades/shop_02.png";
 
 export const SHOP_BASE_SIZE = { width: 2_172, height: 724 } as const;
 
 export const SHOP_OVERLAY_BOX = { x: 700, y: 0, w: 860, h: 520 } as const;
 export const SHOP_STAGE_FADE_MS = 500;
-export const SHOP_STAGE_ASSET_DIRECTORY = "/assets/shop-stages";
+export const SHOP_STAGE_ASSET_DIRECTORY = "assets/business-upgrades";
 
 export type ShopStage = {
   id: number;
@@ -31,13 +33,13 @@ const stageNames = [
   `Thương hiệu ${GAME_NAME_VI}`,
 ] as const;
 
-// Stage 1 is supplied as PNG; the remaining stage overlays are still pending.
+// Stages 1 and 2 use full-facade replacement artwork; later overlays are still pending.
 export const SHOP_STAGES: readonly ShopStage[] = stageNames.map((name, index) => {
   const id = index + 1;
-  const filename = `shop_${String(id).padStart(2, "0")}.${id === 1 ? "png" : "webp"}`;
+  const filename = `shop_${String(id).padStart(2, "0")}.${id <= 2 ? "png" : "webp"}`;
   return {
     id,
-    image: id === 1 ? `${SHOP_STAGE_ASSET_DIRECTORY}/${filename}` : null,
+    image: id === 1 ? shopStage01Url : id === 2 ? shopStage02Url : null,
     filename,
     name,
     price: undefined,

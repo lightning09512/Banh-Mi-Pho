@@ -319,6 +319,11 @@ document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
   const button = target.closest<HTMLButtonElement>("button[data-action]");
+  const panButton = target.closest<HTMLButtonElement>("button[data-map-pan]");
+  if (panButton) {
+    scene.panMap(panButton.dataset.mapPan === "-1" ? -1 : 1);
+    return;
+  }
   if (!button || button.disabled) return;
 
   switch (button.dataset.action) {

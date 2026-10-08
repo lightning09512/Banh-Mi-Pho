@@ -45,7 +45,6 @@ import wardPoliceWalkUrl from "../../assets/characters/saigon-ward-police-office
 import wardInspectorWalkUrl from "../../assets/characters/saigon-ward-inspector-walk-horizontal-user.png";
 import youngMotherWalkUrl from "../../assets/characters/saigon-young-mother-walk-horizontal-v2-concept.png";
 import streetCatActionsUrl from "../../assets/characters/saigon-street-cat-actions.png";
-import streetDogActionsUrl from "../../assets/characters/saigon-street-dog-actions.png";
 import pigeonEatUrl from "../../assets/characters/pigeon_eat-Sheet.png";
 import pigeonFlyUrl from "../../assets/characters/pigeon_fiy-Sheet.png";
 import pigeonWalkUrl from "../../assets/characters/pigeon_walking-Sheet.png";
@@ -122,7 +121,6 @@ const WALKER_TEXTURES = [
   "walk-shopper",
   "walk-tourist",
   "walk-street-cat",
-  "walk-street-dog",
   "walk-construction-worker",
   "walk-delivery-rider",
   "walk-food-reviewer",
@@ -145,16 +143,13 @@ const WALKER_FOOTPRINTS: Partial<Record<(typeof WALKER_TEXTURES)[number], {
   shadowWidth: number;
   shadowHeight: number;
 }>> = {
-  // The new pet atlases use square frames; keeping their display boxes square
-  // preserves the original pixel-art proportions while the transparent padding
-  // keeps each pose aligned to the sidewalk baseline.
+  // The cat atlas uses square frames; its transparent padding keeps poses
+  // aligned to the sidewalk baseline.
   "walk-street-cat": { width: 72, height: 72, shadowWidth: 33, shadowHeight: 7 },
-  "walk-street-dog": { width: 68, height: 68, shadowWidth: 34, shadowHeight: 8 },
 };
 
 const PET_SPRITE_GRIDS = {
   "walk-street-cat": { url: streetCatActionsUrl, frameWidth: 160, frameHeight: 160 },
-  "walk-street-dog": { url: streetDogActionsUrl, frameWidth: 96, frameHeight: 96 },
 } as const;
 
 const AMBIENT_WALKER_ASSETS = [
@@ -163,7 +158,6 @@ const AMBIENT_WALKER_ASSETS = [
   { key: "walk-shopper", url: marketShopperWalkUrl },
   { key: "walk-tourist", url: touristWalkUrl },
   { key: "walk-street-cat", url: streetCatActionsUrl },
-  { key: "walk-street-dog", url: streetDogActionsUrl },
   { key: "walk-construction-worker", url: constructionWorkerWalkUrl },
   { key: "walk-delivery-rider", url: deliveryRiderWalkUrl },
   { key: "walk-food-reviewer", url: foodReviewerWalkUrl },
@@ -317,7 +311,7 @@ const STREET_MAP_ASSETS: { mood: StreetMapMood; url: string }[] = [
 ];
 
 function getWalkerOriginY(_textureKey: string): number {
-  if (_textureKey === "walk-street-cat" || _textureKey === "walk-street-dog") return 1;
+  if (_textureKey === "walk-street-cat") return 1;
   return _textureKey === "walk-student" ? 366 / 392 : WALKER_BASELINE_Y / CUSTOMER_FRAME_HEIGHT;
 }
 
@@ -366,22 +360,20 @@ function getGroceryBrowseOriginY(textureKey: string): number {
 }
 
 function getWalkerStartFrame(textureKey: string, direction: -1 | 1): number {
-  if (textureKey === "walk-street-cat" || textureKey === "walk-street-dog") return direction > 0 ? 4 : 12;
+  if (textureKey === "walk-street-cat") return direction > 0 ? 4 : 12;
   if (textureKey === "walk-office" || textureKey === "walk-shopper" || textureKey === "walk-tourist" || textureKey === "walk-construction-worker" || textureKey === "walk-delivery-rider" || textureKey === "walk-food-reviewer" || textureKey === "walk-genz-nightowl" || textureKey === "walk-ingredient-supplier" || textureKey === "walk-lottery-vendor" || textureKey === "walk-ward-police-officer" || textureKey === "walk-ward-inspector" || textureKey === "walk-morning-jogger") return direction > 0 ? 12 : 0;
   return direction > 0 ? 8 : 0;
 }
 
 function getAmbientWalkerSpeed(index: number, textureKey: string, unit: number): number {
   if (textureKey === "walk-street-cat") return 30 * unit;
-  if (textureKey === "walk-street-dog") return 32 * unit;
   return (28 + ((index * 11) % 5) * 3) * unit;
 }
 
-function getAmbientWalkerDepth(textureKey: string, y: number, unit: number): number {
-  const isPet = textureKey === "walk-street-cat" || textureKey === "walk-street-dog";
-  // Sort by foot lane so characters in front naturally cover those behind.
-  // A small pet bias keeps their silhouettes readable when they cross a pedestrian.
-  return 3.6 + (y + (isPet ? 8 * unit : 0)) / 100_000;
+function getStreetCharacterDepth(y: number): number {
+  // Every person and pet uses the same foot-baseline sort. A larger y is nearer
+  // the camera, so the front sidewalk lane always draws over the back lane.
+  return 3.5 + y / 100_000;
 }
 
 const WEATHER_FRAMES = {
@@ -410,7 +402,9 @@ const WEATHER_FRAMES = {
   ],
 } as const;
 
-const WALKER_LANE_RATIOS = [0.725, 0.795] as const;
+// Count paving rows from the curb: lane 0 is the back line on row 3, and lane 1
+// is the front line on row 1. Its lower foot baseline naturally sorts in front.
+const WALKER_LANE_RATIOS = [0.75, 0.795] as const;
 
 const DAY_NIGHT_FRAMES = {
   sun: [327, 117, 128, 136],
@@ -673,7 +667,7 @@ export class NeighborhoodScene extends Phaser.Scene {
   private maxPanX = 0;
   private dragStart?: { x: number; scrollX: number; pointerId: number };
   private dragMoved = false;
-  private dragSurface?: HTMLElement;
+  private dragSurface?: HTMLCanvasElement;
   private gradeSignature = "";
   private environmentElapsedMs = 0;
   private lastEnvironmentUiAt = 0;
@@ -685,6 +679,7 @@ export class NeighborhoodScene extends Phaser.Scene {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (event.target instanceof Element && event.target.closest("button, a, input, select, textarea, summary, [role='button']")) return;
 
+    event.preventDefault();
     this.dragStart = {
       x: event.clientX,
       scrollX: this.cameras.main.scrollX,
@@ -702,6 +697,7 @@ export class NeighborhoodScene extends Phaser.Scene {
     const dragStart = this.dragStart;
     if (!dragStart || event.pointerId !== dragStart.pointerId) return;
 
+    event.preventDefault();
     const deltaX = event.clientX - dragStart.x;
     if (!this.dragMoved && Math.abs(deltaX) < 5) return;
     this.dragMoved = true;
@@ -864,7 +860,9 @@ export class NeighborhoodScene extends Phaser.Scene {
     this.createAmbientWalkers(0, CORE_WALKER_COUNT);
     this.loadBackgroundWalkerAssets();
     this.createLivingEnvironment();
-    this.dragSurface = this.game.canvas.parentElement?.parentElement ?? undefined;
+    // Capture drags on the canvas itself so touch/mouse gestures keep working
+    // after the pointer leaves the canvas edge.
+    this.dragSurface = this.game.canvas;
     this.dragSurface?.addEventListener("pointerdown", this.onMapPointerDown);
     this.dragSurface?.addEventListener("pointermove", this.onMapPointerMove);
     this.dragSurface?.addEventListener("pointerup", this.onMapPointerUp);
@@ -951,45 +949,6 @@ export class NeighborhoodScene extends Phaser.Scene {
         this.anims.create({
           key: `${textureKey}-sleep`,
           frames: this.anims.generateFrameNumbers(textureKey, { start: 28, end: 31 }),
-          frameRate: 2,
-          repeat: -1,
-        });
-        continue;
-      }
-      if (textureKey === "walk-street-dog") {
-        this.anims.create({
-          key: `${textureKey}-left`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 12, end: 15 }),
-          frameRate: 5,
-          repeat: -1,
-        });
-        this.anims.create({
-          key: `${textureKey}-right`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 4, end: 7 }),
-          frameRate: 5,
-          repeat: -1,
-        });
-        this.anims.create({
-          key: `${textureKey}-sit`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 16, end: 19 }),
-          frameRate: 2,
-          repeat: -1,
-        });
-        this.anims.create({
-          key: `${textureKey}-settle`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 20, end: 23 }),
-          frameRate: 4,
-          repeat: 0,
-        });
-        this.anims.create({
-          key: `${textureKey}-sit-side`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 24, end: 26 }),
-          frameRate: 2,
-          repeat: -1,
-        });
-        this.anims.create({
-          key: `${textureKey}-sleep`,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 28, end: 29 }),
           frameRate: 2,
           repeat: -1,
         });
@@ -1229,7 +1188,7 @@ export class NeighborhoodScene extends Phaser.Scene {
         .setAlpha(0.98);
       const bubble = this.createGrocerySpeechBubble(Phaser.Utils.Array.GetRandom([...profile.dialogues]));
       const container = this.add.container(startRatio * this.mapWidth, this.groundY, [shadow, sprite, bubble])
-        .setDepth(3.58);
+        .setDepth(getStreetCharacterDepth(this.groundY));
       const shopper: GroceryShopper = {
         profile,
         container,
@@ -1343,7 +1302,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       }
 
       shopper.container.x = shopper.xRatio * this.mapWidth;
-      shopper.container.setDepth(3.56 + shopper.container.y / 100_000);
+      shopper.container.setDepth(getStreetCharacterDepth(shopper.container.y));
       const shadow = shopper.container.getAt(0) as Phaser.GameObjects.Image;
       shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(34 * this.unit, 8 * this.unit);
       if (shopper.phase === "shopping") {
@@ -1414,7 +1373,8 @@ export class NeighborhoodScene extends Phaser.Scene {
         .setAlpha(0.98)
         .play(`${profile.walkTexture}-${direction > 0 ? "right" : "left"}`);
       sprite.anims.setProgress(Math.random());
-      const container = this.add.container(spawnX, this.groundY, [shadow, sprite]).setDepth(3.58);
+      const container = this.add.container(spawnX, this.groundY, [shadow, sprite])
+        .setDepth(getStreetCharacterDepth(this.groundY));
       const diner: StreetDiner = {
         profile,
         seat,
@@ -1500,7 +1460,7 @@ export class NeighborhoodScene extends Phaser.Scene {
 
       const x = diner.xRatio * this.mapWidth;
       diner.container.x = x;
-      diner.container.setDepth(3.54 + diner.container.y / 100_000);
+      diner.container.setDepth(getStreetCharacterDepth(diner.container.y));
       const shadow = diner.container.getAt(0) as Phaser.GameObjects.Image;
       shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(31 * this.unit, 8 * this.unit);
       const isWalking = diner.sprite.texture.key === diner.profile.walkTexture;
@@ -1657,7 +1617,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       .setText(`CẤP ${String(stage.id).padStart(2, "0")} / 12 · ${stage.name}`)
       .setResolution(dpr);
     this.shopStageAsset
-      .setText(`Thiếu ảnh: public${SHOP_STAGE_ASSET_DIRECTORY}/${stage.filename} · 860 × 520 px`)
+      .setText(`Thiếu ảnh: ${SHOP_STAGE_ASSET_DIRECTORY}/${stage.filename} · 860 × 520 px`)
       .setResolution(dpr);
 
     const textureKey = getShopStageImageKey(stage.id);
@@ -1694,7 +1654,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       const camera = this.cameras.main;
       const viewportLeft = camera.scrollX;
       const viewportRight = viewportLeft + this.getLogicalWidth();
-      const isPet = walker.textureKey === "walk-street-cat" || walker.textureKey === "walk-street-dog";
+      const isPet = walker.textureKey === "walk-street-cat";
       const laneY = this.getWalkerLaneY(walker.lane) + Math.sin(index * 1.9) * 2 * this.unit;
       if (isPet) {
         if (walker.petMode === "paused" && _time >= (walker.petPauseUntil ?? 0)) {
@@ -1705,8 +1665,9 @@ export class NeighborhoodScene extends Phaser.Scene {
         }
         if (walker.petMode === "paused") {
           walker.sprite.y = laneY;
-          walker.sprite.setDepth(getAmbientWalkerDepth(walker.textureKey, walker.sprite.y, this.unit));
-          walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit);
+          walker.sprite.setDepth(getStreetCharacterDepth(walker.sprite.y));
+          walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit)
+            .setDepth(getStreetCharacterDepth(laneY) - 0.02);
           continue;
         }
       }
@@ -1714,7 +1675,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       // Keep each walker on one of two sidewalk lanes; the walk frames provide
       // the leg motion, so an extra high-frequency bob only makes sprites jitter.
       walker.sprite.y = laneY;
-      walker.sprite.setDepth(getAmbientWalkerDepth(walker.textureKey, walker.sprite.y, this.unit));
+      walker.sprite.setDepth(getStreetCharacterDepth(walker.sprite.y));
       const leftViewport = walker.direction < 0 && walker.sprite.x < viewportLeft - 60 * this.unit;
       const rightViewport = walker.direction > 0 && walker.sprite.x > viewportRight + 60 * this.unit;
       if (leftViewport || rightViewport) {
@@ -1728,7 +1689,8 @@ export class NeighborhoodScene extends Phaser.Scene {
         );
         continue;
       }
-      walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit);
+      walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * this.unit)
+        .setDepth(getStreetCharacterDepth(laneY) - 0.02);
     }
 
     this.updateStreetDiners(delta);
@@ -1760,9 +1722,12 @@ export class NeighborhoodScene extends Phaser.Scene {
         const laneY = this.getWalkerLaneY(walker.lane);
         walker.sprite.setPosition(spawnX, laneY)
           .setAlpha(0.96 + (walkerIndex % 3) * 0.02)
+          .setDepth(getStreetCharacterDepth(laneY))
           .setVisible(true)
           .play(animation);
-        walker.shadow.setPosition(spawnX, laneY + 1.5 * this.unit).setVisible(true);
+        walker.shadow.setPosition(spawnX, laneY + 1.5 * this.unit)
+          .setDepth(getStreetCharacterDepth(laneY) - 0.02)
+          .setVisible(true);
         this.ambientWalkerSpawnCooldownMs = 900 + ((walkerIndex * 197) % 500);
       }
     }
@@ -1859,20 +1824,11 @@ export class NeighborhoodScene extends Phaser.Scene {
       walker.sprite.play(transition);
     };
 
-    if (walker.textureKey === "walk-street-cat") {
-      const actions = ["sit", "groom", "nap", "groom"] as const;
-      const action = actions[cycle % actions.length];
-      walker.petPauseUntil = now + (action === "nap" ? 4_600 : action === "groom" ? 2_600 : 2_000);
-      if (action === "nap") playThenLoop("walk-street-cat-settle", "walk-street-cat-sleep");
-      else walker.sprite.play(`walk-street-cat-${action}`);
-      return;
-    }
-
-    const actions = ["sit", "settle", "sleep", "sit-side"] as const;
+    const actions = ["sit", "groom", "nap", "groom"] as const;
     const action = actions[cycle % actions.length];
-    walker.petPauseUntil = now + (action === "sleep" ? 4_000 : action === "settle" ? 3_200 : 2_300);
-    if (action === "settle") playThenLoop("walk-street-dog-settle", "walk-street-dog-sit-side");
-    else walker.sprite.play(`walk-street-dog-${action}`);
+    walker.petPauseUntil = now + (action === "nap" ? 4_600 : action === "groom" ? 2_600 : 2_000);
+    if (action === "nap") playThenLoop("walk-street-cat-settle", "walk-street-cat-sleep");
+    else walker.sprite.play(`walk-street-cat-${action}`);
   }
 
   private resumePet(walker: Walker, now: number, index: number): void {
@@ -1892,14 +1848,10 @@ export class NeighborhoodScene extends Phaser.Scene {
     for (let index = startIndex; index < endIndex; index += 1) {
       const textureKey = WALKER_TEXTURES[index];
       if (!this.textures.exists(textureKey) || !this.anims.exists(`${textureKey}-left`)) continue;
-      const direction = textureKey === "walk-street-cat"
-        ? 1
-        : textureKey === "walk-street-dog"
-          ? -1
-          : directions[index % directions.length];
+      const direction = textureKey === "walk-street-cat" ? 1 : directions[index % directions.length];
       const lane: 0 | 1 = direction > 0 ? 0 : 1;
       const laneY = this.getWalkerLaneY(lane);
-      const isPet = textureKey === "walk-street-cat" || textureKey === "walk-street-dog";
+      const isPet = textureKey === "walk-street-cat";
       const size = isPet
         ? (0.88 + ((index * 3) % 5) * 0.07) * 0.92
         : getCharacterScaleFactor(
@@ -1910,19 +1862,17 @@ export class NeighborhoodScene extends Phaser.Scene {
       const footprint = WALKER_FOOTPRINTS[textureKey] ?? { width: 60, height: 96, shadowWidth: 34, shadowHeight: 9 };
       const positionRatio = textureKey === "walk-street-cat"
         ? 0.43
-        : textureKey === "walk-street-dog"
-          ? 0.57
-          : ((index % MAX_ACTIVE_AMBIENT_WALKERS) + 0.5) / MAX_ACTIVE_AMBIENT_WALKERS;
+        : ((index % MAX_ACTIVE_AMBIENT_WALKERS) + 0.5) / MAX_ACTIVE_AMBIENT_WALKERS;
       const animationKey = `${textureKey}-${direction > 0 ? "right" : "left"}`;
       const active = this.walkers.reduce((count, walker) => count + Number(walker.active), 0) < MAX_ACTIVE_AMBIENT_WALKERS;
       const shadow = this.add.image(positionRatio * width, laneY + 1.5 * this.unit, "character-contact-shadow-soft")
         .setOrigin(0.5)
-        .setDepth(3.59)
+        .setDepth(getStreetCharacterDepth(laneY) - 0.02)
         .setAlpha(isPet ? 0.34 : 0.56)
         .setVisible(active);
       const sprite = this.add.sprite(positionRatio * width, laneY, textureKey, getWalkerStartFrame(textureKey, direction))
         .setOrigin(0.5, getWalkerOriginY(textureKey))
-        .setDepth(getAmbientWalkerDepth(textureKey, 0, this.unit))
+        .setDepth(getStreetCharacterDepth(laneY))
         .setAlpha(0.96 + (index % 3) * 0.02)
         .setVisible(active);
       if (active) sprite.play(animationKey).anims.setProgress((index * 0.173) % 1);
@@ -2361,7 +2311,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       sprite.setFlipX(pigeon.direction < 0)
         .setPosition(pigeon.x, pigeon.y)
         .setDisplaySize(displayWidth, displayHeight)
-        .setDepth(getAmbientWalkerDepth("walk-street-cat", pigeon.y, this.unit) - 0.035)
+        .setDepth(getStreetCharacterDepth(pigeon.y) - 0.035)
         .setAlpha(daylight * (1 - rain * 0.45))
         .setVisible(true);
       shadow.setPosition(pigeon.x, pigeon.y + 1.5 * this.unit)
@@ -2525,9 +2475,11 @@ export class NeighborhoodScene extends Phaser.Scene {
       const laneY = mapTop + mapHeight * WALKER_LANE_RATIOS[walker.lane] + Math.sin(index * 1.9) * 2 * unit;
       walker.shadow.setPosition(walker.sprite.x, laneY + 1.5 * unit)
         .setDisplaySize(walker.shadowWidth * walker.size * unit, walker.shadowHeight * walker.size * unit)
+        .setDepth(getStreetCharacterDepth(laneY) - 0.02)
         .setVisible(walker.active);
       walker.sprite.setPosition(walker.sprite.x, laneY)
         .setDisplaySize(walker.width * walker.size * unit, walker.height * walker.size * unit)
+        .setDepth(getStreetCharacterDepth(laneY))
         .setVisible(walker.active);
     });
     this.clouds.forEach((cloud, index) => {
@@ -2569,6 +2521,15 @@ export class NeighborhoodScene extends Phaser.Scene {
     if (!this.mapWidth) return;
     const desired = this.cartX - this.getLogicalWidth() / 2;
     this.cameras.main.setScroll(Phaser.Math.Clamp(desired, 0, this.maxPanX), 0);
+  }
+
+  panMap(direction: -1 | 1): void {
+    if (!this.mapWidth) return;
+    const distance = Math.max(this.getLogicalWidth() * 0.72, 220 * this.unit);
+    this.cameras.main.setScroll(
+      Phaser.Math.Clamp(this.cameras.main.scrollX + direction * distance, 0, this.maxPanX),
+      0,
+    );
   }
 
   private getCustomerAppearance(type: CustomerType, id: number): CustomerAppearance {
@@ -2656,7 +2617,9 @@ export class NeighborhoodScene extends Phaser.Scene {
           backgroundColor: "#285a53",
           padding: { x: 5, y: 3 },
         }).setOrigin(0.5, 1);
-        container = this.add.container(this.cameras.main.scrollX + 48 * unit, groundY, [shadow, sprite, label, orderTag]).setDepth(6).setData("customerId", customer.id);
+        container = this.add.container(this.cameras.main.scrollX + 48 * unit, groundY, [shadow, sprite, label, orderTag])
+          .setDepth(getStreetCharacterDepth(groundY))
+          .setData("customerId", customer.id);
         this.crowd.set(customer.id, container);
         const arrival = customer.status === "walking";
         this.crowdMotion.set(customer.id, {
