@@ -9,6 +9,8 @@ const TRACKS = [
   { name: "Lantern-lit Tavern", src: new URL("../../assets/sound/Lantern-lit Tavern.mp3", import.meta.url).href },
   { name: "Market Day Melody", src: new URL("../../assets/sound/Market Day Melody.mp3", import.meta.url).href },
   { name: "Countryside Morning", src: new URL("../../assets/sound/Countryside Morning.mp3", import.meta.url).href },
+  { name: "Countryside Morning 2", src: new URL("../../assets/sound/Countryside Morning 2.mp3", import.meta.url).href },
+  { name: "Countryside Morning 3", src: new URL("../../assets/sound/Countryside Morning 3.mp3", import.meta.url).href },
 ] as const;
 
 export interface MusicPlayerState {

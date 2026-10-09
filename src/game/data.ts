@@ -1,11 +1,11 @@
 import { SHOP_STAGES } from "../config/shopStages";
 
 export const INGREDIENTS = [
-  { id: "bread", name: "Bắp nướng", icon: "🌽", unitCost: 4 },
-  { id: "pate", name: "Sốt ướp", icon: "🫙", unitCost: 2 },
-  { id: "cha", name: "Ba chỉ nướng", icon: "🥩", unitCost: 4 },
-  { id: "egg", name: "Trứng nướng", icon: "🍳", unitCost: 3 },
-  { id: "greens", name: "Rau ăn kèm", icon: "🥬", unitCost: 2 },
+  { id: "bread", name: "Bắp nướng", icon: "corn", unitCost: 4 },
+  { id: "pate", name: "Sốt ướp", icon: "sauce-jar", unitCost: 2 },
+  { id: "cha", name: "Ba chỉ nướng", icon: "pork-skewer", unitCost: 4 },
+  { id: "egg", name: "Trứng nướng", icon: "egg-grill", unitCost: 3 },
+  { id: "greens", name: "Rau ăn kèm", icon: "greens", unitCost: 2 },
 ] as const;
 
 export type IngredientId = (typeof INGREDIENTS)[number]["id"];

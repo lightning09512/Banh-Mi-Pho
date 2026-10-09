@@ -17,24 +17,24 @@
     <div id="app">
       <header class="topbar">
         <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">🍻</span>
+          <span class="brand-mark" aria-hidden="true"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#beer-toast"></use></svg></span>
           <div class="brand-copy">
             <p class="eyebrow">TYCOON PHỐ SÀI GÒN</p>
             <h1 id="store-name-display">__GAME_NAME_VI__</h1>
           </div>
         </div>
         <div class="wallet-row" aria-label="Tài sản cửa hàng">
-          <div class="wallet-pill"><span>🪙</span><strong id="coins">0</strong><small>xu</small></div>
-          <div class="wallet-pill reputation-pill"><span>⭐</span><strong id="reputation">0</strong></div>
+          <div class="wallet-pill"><span class="wallet-icon" aria-hidden="true"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#coin"></use></svg></span><strong id="coins">0</strong><small>xu</small></div>
+          <div class="wallet-pill reputation-pill"><span class="wallet-icon" aria-hidden="true"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#reputation-star"></use></svg></span><strong id="reputation">0</strong></div>
           <details class="music-control">
-            <summary class="music-control-button" id="music-control-trigger" aria-label="Mở điều khiển nhạc nền" title="Nhạc nền">♫</summary>
+            <summary class="music-control-button" id="music-control-trigger" aria-label="Mở điều khiển nhạc nền" title="Nhạc nền"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#music-note"></use></svg></summary>
             <div class="music-popover">
               <div class="music-popover-heading">
                 <strong>Nhạc nền</strong>
                 <small id="music-track-name">Autumn Evening</small>
               </div>
               <button class="music-toggle-button" id="music-toggle" data-action="toggle-music" type="button" aria-pressed="false">
-                <span id="music-toggle-icon" aria-hidden="true">▶</span>
+                <svg id="music-toggle-icon" class="ui-icon"><use href="/assets/saigon-ui-icons.svg#play"></use></svg>
                 <span id="music-toggle-label">Phát nhạc</span>
               </button>
               <label class="music-volume-label" for="music-volume">
@@ -43,28 +43,34 @@
               <input id="music-volume" class="music-volume-slider" type="range" min="0" max="40" step="1" value="16" />
             </div>
           </details>
-          <button class="fullscreen-button" data-action="fullscreen" aria-label="Bật toàn màn hình" title="Toàn màn hình">⛶</button>
+          <button class="fullscreen-button" data-action="fullscreen" aria-label="Bật toàn màn hình" title="Toàn màn hình"><svg id="fullscreen-icon" class="ui-icon"><use href="/assets/saigon-ui-icons.svg#fullscreen"></use></svg></button>
         </div>
       </header>
 
       <main>
         <section class="street-section" aria-label="Phố có quán nhậu">
           <div id="phaser-root" class="game-canvas" aria-label="Cảnh phố trong game, kéo ngang để xem thêm"></div>
+          <div class="shop-stage-debug" id="shop-stage-debug" hidden aria-label="Điều khiển thử cấp quán">
+            <span>THỬ CẤP QUÁN</span>
+            <button type="button" data-shop-stage-step="-1" aria-label="Giảm cấp quán"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#minus"></use></svg></button>
+            <strong id="shop-stage-debug-value">01 / 13</strong>
+            <button type="button" data-shop-stage-step="1" aria-label="Tăng cấp quán"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#plus"></use></svg></button>
+          </div>
           <div class="map-pan-controls" aria-label="Điều hướng con phố">
-            <button type="button" data-map-pan="-1" aria-label="Xem phần phố bên trái">‹</button>
-            <button type="button" data-map-pan="1" aria-label="Xem phần phố bên phải">›</button>
+            <button type="button" data-map-pan="-1" aria-label="Xem phần phố bên trái"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#arrow-left"></use></svg></button>
+            <button type="button" data-map-pan="1" aria-label="Xem phần phố bên phải"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#arrow-right"></use></svg></button>
           </div>
           <div class="street-caption" aria-live="polite">
             <span class="live-status"><span class="live-dot"></span><strong id="street-status">Góc phố thân quen</strong></span>
-            <span id="weather-label">☀️ Nắng nhẹ · Sài Gòn</span>
+            <span id="weather-label"><svg id="weather-icon" class="ui-icon"><use href="/assets/saigon-ui-icons.svg#sun"></use></svg><span id="weather-copy">Nắng nhẹ · Sài Gòn</span></span>
             <span class="queue-badge">HÀNG <b id="queue-count">0</b></span>
           </div>
-          <div class="map-hint" id="map-hint"><span>↔</span> Vuốt hoặc bấm mũi tên để xem cả con phố</div>
+          <div class="map-hint" id="map-hint"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#map-pan"></use></svg> Vuốt hoặc bấm mũi tên để xem cả con phố</div>
           <p class="visually-hidden" id="customer-callout">Quán đang nghỉ — chuẩn bị hàng rồi mở ca nhé.</p>
         </section>
 
         <button class="shift-fab" id="shift-button" data-action="toggle-shift">
-          <span class="shift-fab-icon" aria-hidden="true">🍻</span>
+          <span class="shift-fab-icon" aria-hidden="true"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#beer-toast"></use></svg></span>
           <span id="shift-button-label">Mở ca bán</span>
           <small id="shift-clock">2 phút</small>
         </button>
@@ -76,7 +82,7 @@
               <p class="eyebrow" id="sheet-eyebrow">GÓC QUẢN LÝ</p>
               <h2 id="sheet-title">Cửa tiệm</h2>
             </div>
-            <button class="sheet-close" data-action="close-panel" aria-label="Đóng bảng">×</button>
+            <button class="sheet-close" data-action="close-panel" aria-label="Đóng bảng"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#close"></use></svg></button>
           </div>
 
           <div class="sheet-content" data-menu-content="menu" hidden>
@@ -87,25 +93,25 @@
             <p id="order-hint" class="order-hint">Mở ca để khách ghé quán. Chọn đúng thứ tự nguyên liệu để nhận tiền boa và danh tiếng.</p>
             <div id="order-steps" class="order-steps" aria-live="polite"></div>
             <div class="ingredient-grid" role="group" aria-label="Chọn nguyên liệu theo thứ tự">
-              <button class="ingredient-button" data-action="ingredient" data-ingredient="bread"><span>🌽</span><b>Bắp nướng</b><small id="stock-bread">0</small></button>
-              <button class="ingredient-button" data-action="ingredient" data-ingredient="pate"><span>🫙</span><b>Sốt ướp</b><small id="stock-pate">0</small></button>
-              <button class="ingredient-button" data-action="ingredient" data-ingredient="cha"><span>🥩</span><b>Ba chỉ nướng</b><small id="stock-cha">0</small></button>
-              <button class="ingredient-button" data-action="ingredient" data-ingredient="egg"><span>🍳</span><b>Trứng nướng</b><small id="stock-egg">0</small></button>
-              <button class="ingredient-button" data-action="ingredient" data-ingredient="greens"><span>🥬</span><b>Rau ăn kèm</b><small id="stock-greens">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="bread"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#corn"></use></svg><b>Bắp nướng</b><small id="stock-bread">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="pate"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#sauce-jar"></use></svg><b>Sốt ướp</b><small id="stock-pate">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="cha"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#pork-skewer"></use></svg><b>Ba chỉ nướng</b><small id="stock-cha">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="egg"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#egg-grill"></use></svg><b>Trứng nướng</b><small id="stock-egg">0</small></button>
+              <button class="ingredient-button" data-action="ingredient" data-ingredient="greens"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#greens"></use></svg><b>Rau ăn kèm</b><small id="stock-greens">0</small></button>
             </div>
             <div class="feedback-line" id="feedback" aria-live="polite">Nhớ thêm rau ăn kèm trước khi phục vụ nhé!</div>
           </div>
 
           <div class="sheet-content" data-menu-content="shop" hidden>
-            <div class="shop-summary"><span class="shop-illustration">🍻</span><div><span class="mini-label">MẶT BẰNG HIỆN TẠI</span><h3 id="business-stage">Quầy nhậu vỉa hè</h3></div></div>
-            <button class="management-action store-name-action" data-action="edit-store-name"><span>✎ Đổi tên biển hiệu</span><small id="store-name-short">Chưa đặt tên</small></button>
-            <button class="management-action upgrade-action" data-action="upgrade"><span id="upgrade-label">🏠 Nâng quán lên cấp 2</span><small id="upgrade-cost">300 xu</small></button>
+            <div class="shop-summary"><span class="shop-illustration"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#storefront"></use></svg></span><div><span class="mini-label">MẶT BẰNG HIỆN TẠI</span><h3 id="business-stage">Quầy nhậu vỉa hè</h3></div></div>
+            <button class="management-action store-name-action" data-action="edit-store-name"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#edit-sign"></use></svg><span>Đổi tên biển hiệu</span></span><small id="store-name-short">Chưa đặt tên</small></button>
+            <button class="management-action upgrade-action" data-action="upgrade"><span id="upgrade-label"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#upgrade-shop"></use></svg><span class="action-label">Nâng quán lên cấp 2</span></span><small id="upgrade-cost">300 xu</small></button>
             <p class="business-note" id="business-note">Phục vụ món để dành tiền nâng cấp. Có phụ bếp, quán vẫn kiếm xu khi bạn rời game.</p>
           </div>
 
           <div class="sheet-content" data-menu-content="staff" hidden>
-            <div class="staff-card"><span class="staff-avatar">🧑‍🍳</span><div><span class="mini-label">PHỤ BẾP</span><h3>Người đồng hành đầu tiên</h3><p>Tự phục vụ khách và tích lũy thu nhập khi bạn nghỉ.</p></div></div>
-            <button class="management-action wide-action" id="hire-button" data-action="hire"><span>🧑‍🍳 Thuê phụ bếp</span><small id="hire-cost">1.200 xu · cần quán cấp 2</small></button>
+            <div class="staff-card"><span class="staff-avatar"><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#staff-chef"></use></svg></span><div><span class="mini-label">PHỤ BẾP</span><h3>Người đồng hành đầu tiên</h3><p>Tự phục vụ khách và tích lũy thu nhập khi bạn nghỉ.</p></div></div>
+            <button class="management-action wide-action" id="hire-button" data-action="hire"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#staff-chef"></use></svg><span class="action-label">Thuê phụ bếp</span></span><small id="hire-cost">1.200 xu · cần quán cấp 2</small></button>
           </div>
 
           <div class="sheet-content" data-menu-content="recipes" hidden>
@@ -116,31 +122,31 @@
           <div class="sheet-content" data-menu-content="stock" hidden>
             <p class="sheet-intro">Nguyên liệu đủ tươi thì quầy mới nhận được mọi đơn.</p>
             <div class="stock-list">
-              <div><span>🌽 Bắp nướng</span><b data-stock-count="bread">0</b></div>
-              <div><span>🫙 Sốt ướp</span><b data-stock-count="pate">0</b></div>
-              <div><span>🥩 Ba chỉ nướng</span><b data-stock-count="cha">0</b></div>
-              <div><span>🍳 Trứng nướng</span><b data-stock-count="egg">0</b></div>
-              <div><span>🥬 Rau ăn kèm</span><b data-stock-count="greens">0</b></div>
+              <div><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#corn"></use></svg>Bắp nướng</span><b data-stock-count="bread">0</b></div>
+              <div><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#sauce-jar"></use></svg>Sốt ướp</span><b data-stock-count="pate">0</b></div>
+              <div><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#pork-skewer"></use></svg>Ba chỉ nướng</span><b data-stock-count="cha">0</b></div>
+              <div><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#egg-grill"></use></svg>Trứng nướng</span><b data-stock-count="egg">0</b></div>
+              <div><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#greens"></use></svg>Rau ăn kèm</span><b data-stock-count="greens">0</b></div>
             </div>
-            <button class="management-action wide-action" data-action="restock"><span>📦 Nhập một chuyến hàng</span><small id="restock-cost">75 xu · thêm 5 phần mỗi món</small></button>
+            <button class="management-action wide-action" data-action="restock"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#crate"></use></svg><span>Nhập một chuyến hàng</span></span><small id="restock-cost">75 xu · thêm 5 phần mỗi món</small></button>
           </div>
         </section>
 
         <nav class="bottom-nav" aria-label="Điều hướng cửa hàng">
-          <button class="nav-button is-active" data-tab-target="outside" aria-pressed="true"><span>🏮</span><small>Bên ngoài</small></button>
-          <button class="nav-button" data-tab-target="shop" aria-pressed="false"><span>🏠</span><small>Cửa tiệm</small></button>
-          <button class="nav-button" data-tab-target="staff" aria-pressed="false"><span>🧑‍🍳</span><small>Nhân viên</small></button>
-          <button class="nav-button" data-tab-target="menu" aria-pressed="false"><span>📋</span><small>Thực đơn</small></button>
-          <button class="nav-button" data-tab-target="recipes" aria-pressed="false"><span>✨</span><small>Sáng tạo</small></button>
-          <button class="nav-button" data-tab-target="stock" aria-pressed="false"><span>🛍️</span><small>Cửa hàng</small></button>
+          <button class="nav-button is-active" data-tab-target="outside" aria-pressed="true"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#lantern"></use></svg></span><small>Bên ngoài</small></button>
+          <button class="nav-button" data-tab-target="shop" aria-pressed="false"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#storefront"></use></svg></span><small>Cửa tiệm</small></button>
+          <button class="nav-button" data-tab-target="staff" aria-pressed="false"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#staff-chef"></use></svg></span><small>Nhân viên</small></button>
+          <button class="nav-button" data-tab-target="menu" aria-pressed="false"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#menu-book"></use></svg></span><small>Thực đơn</small></button>
+          <button class="nav-button" data-tab-target="recipes" aria-pressed="false"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#sparkles"></use></svg></span><small>Sáng tạo</small></button>
+          <button class="nav-button" data-tab-target="stock" aria-pressed="false"><span><svg class="ui-icon"><use href="/assets/saigon-ui-icons.svg#basket"></use></svg></span><small>Cửa hàng</small></button>
         </nav>
       </main>
 
       <section class="store-name-modal" id="store-name-modal" hidden aria-modal="true" role="dialog" aria-labelledby="store-name-heading" aria-describedby="store-name-description">
         <div class="store-name-card">
           <div class="store-name-hero">
-            <span class="store-name-spark spark-one" aria-hidden="true">✦</span>
-            <span class="store-name-spark spark-two" aria-hidden="true">✦</span>
+            <svg class="store-name-spark spark-one ui-icon" aria-hidden="true"><use href="/assets/saigon-ui-icons.svg#sparkles"></use></svg>
+            <svg class="store-name-spark spark-two ui-icon" aria-hidden="true"><use href="/assets/saigon-ui-icons.svg#sparkles"></use></svg>
             <div class="store-sign-preview">
               <span>QUÁN NHẬU</span>
               <strong id="store-name-preview">Tên tiệm của bạn</strong>

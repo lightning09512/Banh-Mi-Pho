@@ -5,6 +5,8 @@ import { GameStore, type GameSnapshot } from "./game/GameStore";
 import { MusicPlayer } from "./game/MusicPlayer";
 import { NeighborhoodScene } from "./game/NeighborhoodScene";
 import { GAME_NAME_VI, GAME_TITLE } from "./config/game";
+import { SHOP_STAGES } from "./config/shopStages";
+import { iconMarkup, setIcon, type UiIconName } from "./ui/icons";
 
 document.title = GAME_TITLE;
 
@@ -25,13 +27,33 @@ const musicPlayer = new MusicPlayer((state) => {
     trigger.title = state.isPlaying ? `Đang phát: ${state.trackName}` : "Nhạc nền";
   }
   if (toggle) toggle.setAttribute("aria-pressed", String(state.isPlaying));
-  if (icon) icon.textContent = state.isPlaying ? "Ⅱ" : "▶";
+  setIcon(icon, state.isPlaying ? "pause" : "play");
   if (label) label.textContent = state.isPlaying ? "Tạm dừng nhạc" : state.enabled ? "Phát nhạc" : "Bật nhạc";
   if (trackName) trackName.textContent = state.trackName;
   if (slider) slider.value = state.volumePercent.toString();
   if (volumeValue) volumeValue.value = `${state.volumePercent}%`;
 });
 const scene = new NeighborhoodScene(store);
+const shopStageDebugControls = document.querySelector<HTMLDivElement>("#shop-stage-debug");
+const shopStageDebugValue = document.querySelector<HTMLElement>("#shop-stage-debug-value");
+const debugParams = new URLSearchParams(window.location.search);
+const shopStageDebugEnabled = import.meta.env.DEV && debugParams.get("debug") === "1";
+if (shopStageDebugControls && shopStageDebugEnabled) {
+  shopStageDebugControls.hidden = false;
+  const requestedStage = Number(debugParams.get("stage"));
+  const initialStage = Number.isInteger(requestedStage) && requestedStage >= 1 && requestedStage <= SHOP_STAGES.length
+    ? requestedStage
+    : store.getSnapshot().cartLevel;
+  if (shopStageDebugValue) shopStageDebugValue.textContent = `${String(initialStage).padStart(2, "0")} / ${SHOP_STAGES.length}`;
+  // Bind this before Phaser initializes so a quick click during its asset load
+  // is queued instead of being lost while the rest of the UI is still booting.
+  shopStageDebugControls.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest<HTMLButtonElement>("button[data-shop-stage-step]");
+    if (button) scene.stepShopStage(Number(button.dataset.shopStageStep));
+  });
+}
 let activeTab = "outside";
 const app = document.querySelector<HTMLDivElement>("#app");
 const phaserRoot = document.querySelector<HTMLDivElement>("#phaser-root");
@@ -169,7 +191,7 @@ function renderRecipes(snapshot: GameSnapshot): void {
   list.innerHTML = Object.values(RECIPES).map((recipe) => {
     const unlocked = snapshot.cartLevel >= recipe.unlockLevel;
     const ingredientNames = recipe.ingredients.map((id) => INGREDIENTS.find((item) => item.id === id)?.name ?? id).join(" · ");
-    return `<article class="recipe-card ${unlocked ? "" : "is-locked"}"><span class="recipe-icon">${unlocked ? "🥖" : "🔒"}</span><div><h3>${recipe.name}</h3><p>${unlocked ? ingredientNames : `Mở khóa ở cấp ${recipe.unlockLevel}`}</p></div><b>${unlocked ? `${recipe.salePrice} xu` : "Chưa mở"}</b></article>`;
+    return `<article class="recipe-card ${unlocked ? "" : "is-locked"}">${iconMarkup(unlocked ? "grill-meal" : "lock", "recipe-icon ui-icon")}<div><h3>${recipe.name}</h3><p>${unlocked ? ingredientNames : `Mở khóa ở cấp ${recipe.unlockLevel}`}</p></div><b>${unlocked ? `${recipe.salePrice} xu` : "Chưa mở"}</b></article>`;
   }).join("");
 }
 
@@ -248,7 +270,7 @@ function render(snapshot: GameSnapshot): void {
         const item = INGREDIENTS.find((entry) => entry.id === ingredientId)!;
         const done = index < snapshot.assembly.length;
         const current = index === snapshot.assembly.length;
-        return `<span class="step-chip ${done ? "done" : ""} ${current ? "current" : ""}"><i>${done ? "✓" : item.icon}</i>${item.name}</span>`;
+        return `<span class="step-chip ${done ? "done" : ""} ${current ? "current" : ""}"><i>${iconMarkup(done ? "check" : item.icon as UiIconName, "step-icon ui-icon")}</i>${item.name}</span>`;
       }).join("");
     }
   }
@@ -269,7 +291,7 @@ function render(snapshot: GameSnapshot): void {
   const nextUpgradeCost = CART_UPGRADE_COST[snapshot.cartLevel] ?? 0;
   const upgradeLabel = $("#upgrade-label");
   const upgradeCost = $("#upgrade-cost");
-  if (upgradeLabel) upgradeLabel.textContent = snapshot.cartLevel < MAX_CART_LEVEL ? `🏠 Nâng quán lên cấp ${snapshot.cartLevel + 1}` : "✅ Đã đạt cấp cao nhất";
+  if (upgradeLabel) upgradeLabel.querySelector<HTMLElement>(".action-label")!.textContent = snapshot.cartLevel < MAX_CART_LEVEL ? `Nâng quán lên cấp ${snapshot.cartLevel + 1}` : "Đã đạt cấp cao nhất";
   if (upgradeCost) upgradeCost.textContent = nextUpgradeCost > 0 ? `${nextUpgradeCost.toLocaleString("vi-VN")} xu` : "Đã xong bản thử";
   if (upgradeButton) upgradeButton.disabled = snapshot.inShift || nextUpgradeCost === 0 || snapshot.coins < nextUpgradeCost;
 
@@ -280,14 +302,14 @@ function render(snapshot: GameSnapshot): void {
     if (businessNote) businessNote.textContent = "Phụ bếp phục vụ tự động khi mở ca và tạo tối đa 4 giờ thu nhập ngoại tuyến.";
     if (hireButton) {
       hireButton.disabled = true;
-      hireButton.querySelector("span")!.textContent = "✅ Đã thuê phụ bếp";
+      hireButton.querySelector<HTMLElement>(".action-label")!.textContent = "Đã thuê phụ bếp";
     }
   } else {
     if (hireCost) hireCost.textContent = snapshot.cartLevel >= 2 ? `${STAFF_HIRE_COST.toLocaleString("vi-VN")} xu` : "1.200 xu · cần quán cấp 2";
     if (businessNote) businessNote.textContent = "Phục vụ món để dành tiền nâng cấp. Có phụ bếp, quán vẫn kiếm xu khi bạn rời game.";
     if (hireButton) {
       hireButton.disabled = snapshot.inShift || snapshot.cartLevel < 2 || snapshot.coins < STAFF_HIRE_COST;
-      hireButton.querySelector("span")!.textContent = "🧑‍🍳 Thuê phụ bếp";
+      hireButton.querySelector<HTMLElement>(".action-label")!.textContent = "Thuê phụ bếp";
     }
   }
 
@@ -309,7 +331,7 @@ function render(snapshot: GameSnapshot): void {
         <div><span>Nguyên liệu</span><strong>−${result.ingredientCosts.toLocaleString("vi-VN")} xu</strong></div>
         <div><span>Tiền công</span><strong>−${result.wages.toLocaleString("vi-VN")} xu</strong></div>
         <div class="net-row"><span>Lãi ròng ca này</span><strong>${signedNet} xu</strong></div>
-        <div><span>Danh tiếng nhận được</span><strong>+${result.reputationEarned} ⭐</strong></div>
+        <div><span>Danh tiếng nhận được</span><strong>+${result.reputationEarned} ${iconMarkup("reputation-star", "report-reputation-icon ui-icon")}</strong></div>
       `;
     }
   }
@@ -431,7 +453,7 @@ document.addEventListener("fullscreenchange", () => {
   const fullscreenButton = document.querySelector<HTMLButtonElement>(".fullscreen-button");
   const isFullscreen = Boolean(document.fullscreenElement);
   if (!fullscreenButton) return;
-  fullscreenButton.textContent = isFullscreen ? "⤢" : "⛶";
+  setIcon(document.querySelector("#fullscreen-icon"), isFullscreen ? "exit-fullscreen" : "fullscreen");
   fullscreenButton.setAttribute("aria-label", isFullscreen ? "Thoát toàn màn hình" : "Bật toàn màn hình");
   fullscreenButton.title = isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình";
 });
@@ -441,5 +463,6 @@ selectTab("outside");
 if (!store.getSnapshot().storeName) openStoreNameModal();
 
 const mapHint = document.querySelector<HTMLElement>("#map-hint");
+if (shopStageDebugEnabled && mapHint) mapHint.hidden = true;
 phaserRoot.addEventListener("pointerdown", () => mapHint?.classList.add("is-dismissed"), { once: true });
 window.setTimeout(() => mapHint?.classList.add("is-dismissed"), 6_000);

@@ -1,0 +1,30 @@
+{
+  "frameWidth": 247,
+  "frameHeight": 396,
+  "idle": {
+    "fps": 7,
+    "frames": 8,
+    "male": "owner_male_idle_8f.png",
+    "female": "owner_female_idle_8f.png"
+  },
+  "walk": {
+    "fps": 10,
+    "frames": 24,
+    "male": "owner_male_walk_24f.png",
+    "female": "owner_female_walk_24f.png",
+    "leftFrames": [
+      0,
+      11
+    ],
+    "rightFrames": [
+      12,
+      23
+    ]
+  },
+  "groundShadow": "owner_ground_shadow.png",
+  "transparent": true,
+  "notes": [
+    "Walk right-facing frames mirror the matching left-facing gait frames.",
+    "These are the base animation atlases; modular hair, clothing, and accessory layers are not included in this initial asset set."
+  ]
+}

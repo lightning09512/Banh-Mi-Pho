@@ -48,9 +48,6 @@ import streetCatActionsUrl from "../../assets/characters/saigon-street-cat-actio
 import pigeonEatUrl from "../../assets/characters/pigeon_eat-Sheet.png";
 import pigeonFlyUrl from "../../assets/characters/pigeon_fiy-Sheet.png";
 import pigeonWalkUrl from "../../assets/characters/pigeon_walking-Sheet.png";
-import pigeonEgg01Url from "../../assets/characters/free_pigeon_prop_pack/eggs/egg_01_16x16.png";
-import pigeonEgg03Url from "../../assets/characters/free_pigeon_prop_pack/eggs/egg_03_16x16.png";
-import pigeonNestUrl from "../../assets/characters/free_pigeon_prop_pack/environment/nest_48x48.png";
 import taphoaStudentBoyWalkUrl from "../../assets/characters/saigon-taphoa-student-boy-walk-v1.png";
 import taphoaCollegeGirlWalkUrl from "../../assets/characters/saigon-taphoa-college-girl-walk-v1.png";
 import taphoaStudentBoyBrowseUrl from "../../assets/characters/saigon-taphoa-student-boy-shop-idle-v1.png";
@@ -60,14 +57,23 @@ import officeWomanCoffeeSeatUrl from "../../assets/characters/saigon-office-woma
 import constructionWorkerComTamSeatUrl from "../../assets/characters/saigon-construction-worker-seated-com-tam-idle.png";
 import backpackerCoffeeSeatUrl from "../../assets/characters/saigon-backpacker-tourist-seated-coffee-idle.png";
 import olderRegularComTamSeatUrl from "../../assets/characters/saigon-older-regular-seated-com-tam-idle.png";
+import ownerMaleIdleUrl from "../../assets/characters/player-owner/owner_male_idle_8f.png";
+import ownerFemaleIdleUrl from "../../assets/characters/player-owner/owner_female_idle_8f.png";
+import ownerGroundShadowUrl from "../../assets/characters/player-owner/owner_ground_shadow.png";
 import {
   getShopStageImageKey,
+  SHOP_EARLY_STAGE_STORE_FRONT_Y,
+  SHOP_OVERLAY_ROOFLINE_Y,
   SHOP_BASE_SIZE,
   SHOP_OVERLAY_BOX,
   SHOP_STAGE_ASSET_DIRECTORY,
+  SHOP_STAGE_ARTWORK_TRIM_BOTTOM_Y,
   SHOP_STAGE_FADE_MS,
+  SHOP_STAGE_ROOFLINE_Y,
   SHOP_STAGES,
 } from "../config/shopStages";
+import { SHOP_COOKING_STEAM_POINTS, STREET_COOKING_STEAM_POINTS } from "../config/cookingSteam";
+import { setIcon, type UiIconName } from "../ui/icons";
 import { RECIPES, type CustomerType } from "./data";
 import { GameStore, type GameSnapshot, type WaitingCustomer } from "./GameStore";
 
@@ -78,6 +84,9 @@ type CustomerAppearance = {
   shortName: string;
   idleAnimation?: string;
 };
+
+type ShopArtworkAlphaBounds = { left: number; top: number; right: number; bottom: number };
+type ShopArtworkTransform = { offsetX: number; offsetY: number; scaleX: number; scaleY: number };
 
 const CUSTOMER_APPEARANCES: Record<CustomerType, readonly CustomerAppearance[]> = {
   student: [
@@ -145,7 +154,7 @@ const WALKER_FOOTPRINTS: Partial<Record<(typeof WALKER_TEXTURES)[number], {
 }>> = {
   // The cat atlas uses square frames; its transparent padding keeps poses
   // aligned to the sidewalk baseline.
-  "walk-street-cat": { width: 72, height: 72, shadowWidth: 33, shadowHeight: 7 },
+  "walk-street-cat": { width: 72, height: 72, shadowWidth: 38, shadowHeight: 9 },
 };
 
 const PET_SPRITE_GRIDS = {
@@ -175,13 +184,30 @@ const AMBIENT_WALKER_ASSETS = [
 ] as const;
 const CUSTOMER_FRAME_WIDTH = 247;
 const CUSTOMER_FRAME_HEIGHT = 396;
+const OWNER_FRAME_WIDTH = 247;
+const OWNER_FRAME_HEIGHT = 396;
+const OWNER_FRAME_BASELINE = 390;
+const OWNER_ART_HEIGHT = 375;
+const OWNER_MAP_Y_RATIO = 0.74;
+const OWNER_DISPLAY_WIDTH = 54;
+const OWNER_DISPLAY_HEIGHT = 86;
+const OWNER_TARGET_VISIBLE_HEIGHT = 78;
+const OWNER_IDLE_FRAME_SEQUENCE = [
+  0, 1, 2, 1, 0, 4, 5, 7,
+  0, 1, 2, 1, 0, 4, 5, 7,
+  0, 1, 2, 1, 0, 4, 5, 7,
+  0, 1, 2, 1, 0, 4, 5, 7,
+  0, 1, 2, 1, 0, 4, 5, 3,
+];
 const CUSTOMER_DISPLAY_WIDTH = 54;
 const CUSTOMER_DISPLAY_HEIGHT = 86;
 const CHARACTER_TARGET_VISIBLE_HEIGHT = 78;
 const WALKER_BASELINE_Y = 374;
 const WALK_FRAME_RATE = 5;
 const CORE_WALKER_COUNT = 6;
-const MAX_ACTIVE_AMBIENT_WALKERS = 14;
+const SHOP_OVERLAY_DEPTH = 3.25;
+const COOKING_STEAM_DEPTH = 3.35;
+const MAX_ACTIVE_AMBIENT_WALKERS = WALKER_TEXTURES.length;
 const LEAF_COUNT = 42;
 const BRANCH_FRAME_WIDTH = 222;
 const BRANCH_FRAME_HEIGHT = 232;
@@ -293,6 +319,7 @@ const DINER_ART_BOTTOMS: Record<string, number> = {
   "diner-older-regular-com-tam": 770,
 };
 
+type OwnerGender = "male" | "female";
 type TimeOfDayMap = "dawn" | "day" | "sunset" | "night";
 type StreetMapMood = TimeOfDayMap | "overcast";
 const STREET_MAP_TEXTURES: Record<StreetMapMood, string> = {
@@ -308,6 +335,25 @@ const STREET_MAP_ASSETS: { mood: StreetMapMood; url: string }[] = [
   { mood: "overcast", url: overcastStreetMapUrl },
   { mood: "sunset", url: sunsetStreetMapUrl },
   { mood: "night", url: nightStreetMapUrl },
+];
+
+// Exterior gains are measured against the matching areas of the painted street
+// maps. Warm shop lights retain their brightness as the surrounding facade dims.
+const SHOP_LIGHTING_GAINS: Record<Exclude<StreetMapMood, "day">, {
+  ambient: readonly [number, number, number];
+  lit: readonly [number, number, number];
+}> = {
+  dawn: { ambient: [0.65, 0.63, 0.82], lit: [1.03, 0.94, 0.84] },
+  sunset: { ambient: [0.96, 0.74, 0.64], lit: [1.08, 0.9, 0.77] },
+  night: { ambient: [0.38, 0.38, 0.56], lit: [0.98, 0.9, 0.78] },
+  overcast: { ambient: [0.78, 0.75, 0.79], lit: [0.97, 0.88, 0.85] },
+};
+
+// Stage 7 was painted with a narrower right bay than Stage 6. These paired
+// source/target x coordinates register its awning, shutter, and utility pole
+// to the fixed three-bay shell without discarding its lower-floor artwork.
+const SHOP_STAGE_07_ALIGNMENT: ReadonlyArray<readonly [number, number]> = [
+  [0, 0], [56, 56], [559, 580], [749, 796], [790, 845], [826, 860],
 ];
 
 function getWalkerOriginY(_textureKey: string): number {
@@ -486,12 +532,34 @@ type RainDrop = {
   drift: number;
 };
 
+type SteamEmitter = {
+  x: number;
+  y: number;
+  size: number;
+  intervalMs: number;
+  cooldownMs: number;
+  sourceScale: number;
+};
+
+type SteamPuff = {
+  sprite: Phaser.GameObjects.Image;
+  life: number;
+  duration: number;
+  originX: number;
+  originY: number;
+  rise: number;
+  drift: number;
+  phase: number;
+  baseScaleX: number;
+  baseScaleY: number;
+};
+
 type WeatherState = {
   cloudCover: number;
   rain: number;
   wind: number;
   label: string;
-  icon: string;
+  icon: UiIconName;
 };
 
 type CrowdMotion = {
@@ -612,13 +680,25 @@ export class NeighborhoodScene extends Phaser.Scene {
   private shopStageTitle!: Phaser.GameObjects.Text;
   private shopStageAsset!: Phaser.GameObjects.Text;
   private shopArtwork?: Phaser.GameObjects.Image;
+  private shopArtworkTransition?: Phaser.GameObjects.Image;
+  private shopArtworkOvercast?: Phaser.GameObjects.Image;
+  private displayedShopStage = 0;
+  private shopLightingState: { from: TimeOfDayMap; to: TimeOfDayMap; blend: number; overcast: number } = {
+    from: "day", to: "day", blend: 0, overcast: 0,
+  };
   private shopDebugFrame?: Phaser.GameObjects.Graphics;
   private shopDebugLabel?: Phaser.GameObjects.Text;
   private shopStage = 0;
   private debugShopStage: number | null = null;
   private shopDebugEnabled = false;
+  private ownerGender: OwnerGender = "male";
+  private ownerCharacter?: Phaser.GameObjects.Sprite;
+  private ownerShadow?: Phaser.GameObjects.Image;
   private pendingShopStageImages = new Set<number>();
   private shopOverlayScale = 1;
+  private shopArtworkTransform: ShopArtworkTransform = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 };
+  private shopArtworkAlphaBoundsCache = new Map<string, ShopArtworkAlphaBounds>();
+  private shopArtworkWarmthCache = new Map<string, Float32Array>();
   private devicePixelRatio = Math.max(1, window.devicePixelRatio || 1);
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private duskOverlay!: Phaser.GameObjects.Rectangle;
@@ -639,8 +719,6 @@ export class NeighborhoodScene extends Phaser.Scene {
   private leaves: MovingSprite[] = [];
   private clouds: SkyCloud[] = [];
   private pigeons: Pigeon[] = [];
-  private pigeonNest!: Phaser.GameObjects.Image;
-  private pigeonEggs: Phaser.GameObjects.Image[] = [];
   private rainDrops: RainDrop[] = [];
   private puddles: { sprite: Phaser.GameObjects.Sprite; x: number; y: number; phase: number }[] = [];
   private plants: Phaser.GameObjects.Sprite[] = [];
@@ -651,7 +729,9 @@ export class NeighborhoodScene extends Phaser.Scene {
   private warmGlows: Phaser.GameObjects.Sprite[] = [];
   private sunlightRays!: Phaser.GameObjects.Graphics;
   private rainTrails!: Phaser.GameObjects.Graphics;
-  private steamPuffs: { puff: Phaser.GameObjects.Ellipse; life: number; speed: number }[] = [];
+  private steamPuffs: SteamPuff[] = [];
+  private steamEmitters: SteamEmitter[] = [];
+  private steamEmitterSignature = "";
   private colorGrade?: Phaser.Filters.ColorMatrix;
   private vignette?: Phaser.Filters.Vignette;
   private cartX = 0;
@@ -662,9 +742,9 @@ export class NeighborhoodScene extends Phaser.Scene {
   private layoutWidth = 0;
   private layoutHeight = 0;
   private mapWidth = 0;
+  private cameraDisplayWidth = 0;
   private mapTop = 0;
   private mapHeight = 0;
-  private maxPanX = 0;
   private dragStart?: { x: number; scrollX: number; pointerId: number };
   private dragMoved = false;
   private dragSurface?: HTMLCanvasElement;
@@ -701,10 +781,8 @@ export class NeighborhoodScene extends Phaser.Scene {
     const deltaX = event.clientX - dragStart.x;
     if (!this.dragMoved && Math.abs(deltaX) < 5) return;
     this.dragMoved = true;
-    this.cameras.main.setScroll(
-      Phaser.Math.Clamp(dragStart.scrollX - deltaX, 0, this.maxPanX),
-      this.cameras.main.scrollY,
-    );
+    const camera = this.cameras.main;
+    camera.setScroll(camera.clampX(dragStart.scrollX - deltaX), camera.scrollY);
   };
 
   private readonly onMapPointerUp = (event: PointerEvent): void => {
@@ -733,6 +811,15 @@ export class NeighborhoodScene extends Phaser.Scene {
     for (const asset of STREET_MAP_ASSETS) {
       this.load.image(STREET_MAP_TEXTURES[asset.mood], asset.url);
     }
+    this.load.spritesheet("player-owner-male-idle", ownerMaleIdleUrl, {
+      frameWidth: OWNER_FRAME_WIDTH,
+      frameHeight: OWNER_FRAME_HEIGHT,
+    });
+    this.load.spritesheet("player-owner-female-idle", ownerFemaleIdleUrl, {
+      frameWidth: OWNER_FRAME_WIDTH,
+      frameHeight: OWNER_FRAME_HEIGHT,
+    });
+    this.load.image("player-owner-ground-shadow", ownerGroundShadowUrl);
     this.preloadShopStageImages(this.getInitialShopStage(), true);
     this.load.spritesheet("diner-office-man-pho", officeManPhoSeatUrl, { frameWidth: CUSTOMER_FRAME_WIDTH, frameHeight: CUSTOMER_FRAME_HEIGHT });
     this.load.spritesheet("diner-office-woman-coffee", officeWomanCoffeeSeatUrl, { frameWidth: CUSTOMER_FRAME_WIDTH, frameHeight: CUSTOMER_FRAME_HEIGHT });
@@ -754,9 +841,6 @@ export class NeighborhoodScene extends Phaser.Scene {
     this.load.spritesheet("pigeon-walking", pigeonWalkUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet("pigeon-eating", pigeonEatUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet("pigeon-flying", pigeonFlyUrl, { frameWidth: 32, frameHeight: 32 });
-    this.load.image("pigeon-nest", pigeonNestUrl);
-    this.load.image("pigeon-egg-01", pigeonEgg01Url);
-    this.load.image("pigeon-egg-03", pigeonEgg03Url);
     this.load.spritesheet("foliage-atlas", foliageUrl, { frameWidth: 271, frameHeight: 241 });
     this.load.spritesheet("edge-branch-sway", edgeBranchSwayUrl, {
       frameWidth: BRANCH_FRAME_WIDTH,
@@ -789,12 +873,16 @@ export class NeighborhoodScene extends Phaser.Scene {
       const weather = params.get("weather");
       if (time === "dawn" || time === "day" || time === "sunset" || time === "night") this.debugTimeOfDay = time;
       if (weather === "clear" || weather === "cloudy" || weather === "rain") this.debugWeather = weather;
+      const requestedOwner = params.get("owner");
+      if (requestedOwner === "male" || requestedOwner === "female") this.ownerGender = requestedOwner;
       this.shopDebugEnabled = params.get("debug") === "1";
       const requestedStage = this.parseDevStage(params.get("stage"));
-      if (requestedStage !== null) this.debugShopStage = requestedStage;
+      // Keep a stage chosen from the debug controls while Phaser is still booting.
+      if (requestedStage !== null && this.debugShopStage === null) this.debugShopStage = requestedStage;
     }
     this.registerEnvironmentFrames();
     this.createCharacterShadowTexture();
+    this.createCookingSteamTexture();
     this.streetBackdrop = this.add.image(0, 0, STREET_MAP_TEXTURES.day)
       .setOrigin(0.5).setDepth(-2).setAlpha(0.7).setTint(0x9d8c72);
     this.streetBackdrop.enableFilters();
@@ -857,7 +945,21 @@ export class NeighborhoodScene extends Phaser.Scene {
       repeat: -1,
     });
 
+    this.anims.create({
+      key: "player-owner-male-idle-loop",
+      frames: this.anims.generateFrameNumbers("player-owner-male-idle", { frames: OWNER_IDLE_FRAME_SEQUENCE }),
+      frameRate: 8,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "player-owner-female-idle-loop",
+      frames: this.anims.generateFrameNumbers("player-owner-female-idle", { frames: OWNER_IDLE_FRAME_SEQUENCE }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
     this.createAmbientWalkers(0, CORE_WALKER_COUNT);
+    this.createPlayerOwner();
     this.loadBackgroundWalkerAssets();
     this.createLivingEnvironment();
     // Capture drags on the canvas itself so touch/mouse gestures keep working
@@ -879,12 +981,10 @@ export class NeighborhoodScene extends Phaser.Scene {
     });
     if (this.shopDebugEnabled) {
       this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
-        if (event.key === "[") this.setShopStage(this.shopStage - 1);
-        else if (event.key === "]") this.setShopStage(this.shopStage + 1);
+        if (event.key === "[" || event.key === "-") this.stepShopStage(-1);
+        else if (event.key === "]" || event.key === "+" || event.key === "=") this.stepShopStage(1);
       });
     }
-    this.time.addEvent({ delay: 1_050, loop: true, callback: () => this.emitSteam() });
-
     this.scale.on("resize", this.layout, this);
     this.time.addEvent({ delay: 1_000, loop: true, callback: () => this.store.tick() });
     this.store.subscribe((snapshot) => {
@@ -978,10 +1078,14 @@ export class NeighborhoodScene extends Phaser.Scene {
         frameRate: WALK_FRAME_RATE,
         repeat: -1,
       });
+      // The last right-facing sweeper cell is clipped at the sprite-sheet edge,
+      // cutting off the broom head. Skip it and keep the original loop duration.
+      const rightFrameEnd = textureKey === "walk-street-sweeper" ? 14 : 15;
+      const rightFrameCount = rightFrameEnd - 8 + 1;
       this.anims.create({
         key: `${textureKey}-right`,
-        frames: this.anims.generateFrameNumbers(textureKey, { start: 8, end: 15 }),
-        frameRate: WALK_FRAME_RATE,
+        frames: this.anims.generateFrameNumbers(textureKey, { start: 8, end: rightFrameEnd }),
+        frameRate: WALK_FRAME_RATE * rightFrameCount / 8,
         repeat: -1,
       });
     }
@@ -1180,8 +1284,8 @@ export class NeighborhoodScene extends Phaser.Scene {
       const approachDistance = GROCERY_APPROACH_DISTANCE * this.unit;
       const startRatio = GROCERY_SHOP_TARGET_X_RATIO - direction * approachDistance / this.mapWidth;
       const shadow = this.add.image(0, 1.5 * this.unit, "character-contact-shadow-soft")
-        .setDisplaySize(34 * this.unit, 8 * this.unit)
-        .setAlpha(0.48);
+        .setDisplaySize(42 * this.unit, 11 * this.unit)
+        .setAlpha(0.8);
       const sprite = this.add.sprite(0, 0, profile.walkTexture, getWalkerStartFrame(profile.walkTexture, direction))
         .setOrigin(0.5, getWalkerOriginY(profile.walkTexture))
         .setDisplaySize(GROCERY_DISPLAY_WIDTH * this.unit, GROCERY_DISPLAY_HEIGHT * this.unit)
@@ -1304,7 +1408,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       shopper.container.x = shopper.xRatio * this.mapWidth;
       shopper.container.setDepth(getStreetCharacterDepth(shopper.container.y));
       const shadow = shopper.container.getAt(0) as Phaser.GameObjects.Image;
-      shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(34 * this.unit, 8 * this.unit);
+      shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(42 * this.unit, 11 * this.unit);
       if (shopper.phase === "shopping") {
         shopper.sprite.setOrigin(0.5, getGroceryBrowseOriginY(shopper.profile.browseTexture));
         setCharacterDisplaySize(
@@ -1365,8 +1469,8 @@ export class NeighborhoodScene extends Phaser.Scene {
       const startRatio = seat.xRatio - direction * approachDistance / this.mapWidth;
       const spawnX = startRatio * this.mapWidth;
       const shadow = this.add.image(0, 1.5 * this.unit, "character-contact-shadow-soft")
-        .setDisplaySize(31 * this.unit, 8 * this.unit)
-        .setAlpha(0.47);
+        .setDisplaySize(38 * this.unit, 11 * this.unit)
+        .setAlpha(0.8);
       const sprite = this.add.sprite(0, 0, profile.walkTexture, getWalkerStartFrame(profile.walkTexture, direction))
         .setOrigin(0.5, getWalkerOriginY(profile.walkTexture))
         .setDisplaySize(DINER_DISPLAY_WIDTH * this.unit, DINER_DISPLAY_HEIGHT * this.unit)
@@ -1462,7 +1566,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       diner.container.x = x;
       diner.container.setDepth(getStreetCharacterDepth(diner.container.y));
       const shadow = diner.container.getAt(0) as Phaser.GameObjects.Image;
-      shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(31 * this.unit, 8 * this.unit);
+      shadow.setPosition(0, 1.5 * this.unit).setDisplaySize(38 * this.unit, 11 * this.unit);
       const isWalking = diner.sprite.texture.key === diner.profile.walkTexture;
       const textureKey = diner.sprite.texture.key;
       const frameHeight = isWalking ? getWalkerFrameHeight(diner.profile.walkTexture) : getDinerFrameHeight(textureKey);
@@ -1503,7 +1607,7 @@ export class NeighborhoodScene extends Phaser.Scene {
   }
 
   private parseDevStage(value: string | null): number | null {
-    if (!value || !/^(?:[1-9]|1[0-2])$/.test(value)) return null;
+    if (!value || !/^(?:[1-9]|1[0-3])$/.test(value)) return null;
     return Number(value);
   }
 
@@ -1516,7 +1620,10 @@ export class NeighborhoodScene extends Phaser.Scene {
   }
 
   private preloadShopStageImages(stageId: number, duringScenePreload = false): void {
-    const ids = [...new Set([stageId, Math.min(SHOP_STAGES.length, stageId + 1)])];
+    const ids = [...new Set([
+      stageId,
+      Math.min(SHOP_STAGES.length, stageId + 1),
+    ])];
     let queued = false;
     for (const id of ids) {
       const stage = SHOP_STAGES[id - 1];
@@ -1559,7 +1666,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       this.shopPlaceholderFrame,
       this.shopStageTitle,
       this.shopStageAsset,
-    ]).setDepth(0.35);
+    ]).setDepth(SHOP_OVERLAY_DEPTH);
 
     if (this.shopDebugEnabled) {
       this.shopDebugFrame = this.add.graphics().setDepth(8).setScrollFactor(1);
@@ -1569,14 +1676,78 @@ export class NeighborhoodScene extends Phaser.Scene {
         color: "#fff",
         backgroundColor: "#9e2433",
         padding: { x: 6, y: 4 },
-      }).setOrigin(0).setDepth(8).setScrollFactor(1);
+      }).setOrigin(0).setDepth(8).setScrollFactor(1).setVisible(false);
     }
+  }
+
+  private getPlayerOwnerTextureKey(): string {
+    return `player-owner-${this.ownerGender}-idle`;
+  }
+
+  private createPlayerOwner(): void {
+    const textureKey = this.getPlayerOwnerTextureKey();
+    const animationKey = `${textureKey}-loop`;
+    this.ownerShadow = this.add.image(0, 0, "player-owner-ground-shadow")
+      .setOrigin(0.5)
+      .setAlpha(0.92);
+    this.ownerCharacter = this.add.sprite(0, 0, textureKey, 0)
+      .setOrigin(0.5, OWNER_FRAME_BASELINE / OWNER_FRAME_HEIGHT)
+      .play(animationKey);
+  }
+
+  setPlayerOwnerGender(gender: OwnerGender): void {
+    if (gender !== "male" && gender !== "female") return;
+    this.ownerGender = gender;
+    if (!this.ownerCharacter) return;
+    const textureKey = this.getPlayerOwnerTextureKey();
+    if (!this.textures.exists(textureKey)) return;
+    this.ownerCharacter.anims.stop();
+    this.ownerCharacter
+      .setTexture(textureKey, 0)
+      .setOrigin(0.5, OWNER_FRAME_BASELINE / OWNER_FRAME_HEIGHT)
+      .play(`${textureKey}-loop`);
+  }
+
+  private layoutPlayerOwner(x: number, y: number, unit: number): void {
+    if (!this.ownerCharacter || !this.ownerShadow) return;
+    const depth = getStreetCharacterDepth(y);
+    this.ownerShadow
+      .setPosition(x, y + 1.5 * unit)
+      .setDisplaySize(42 * unit, 12 * unit)
+      .setDepth(depth - 0.02);
+    this.ownerCharacter
+      .setPosition(x, y)
+      .setDepth(depth)
+      .setOrigin(0.5, OWNER_FRAME_BASELINE / OWNER_FRAME_HEIGHT);
+    setCharacterDisplaySize(
+      this.ownerCharacter,
+      OWNER_DISPLAY_WIDTH * unit,
+      OWNER_DISPLAY_HEIGHT * unit,
+      OWNER_FRAME_HEIGHT,
+      OWNER_ART_HEIGHT,
+      OWNER_TARGET_VISIBLE_HEIGHT * unit,
+    );
   }
 
   setShopStage(stageId: number): void {
     if (!Number.isFinite(stageId)) return;
     this.debugShopStage = Phaser.Math.Clamp(Math.round(stageId), 1, SHOP_STAGES.length);
     this.transitionShopStage(this.debugShopStage, true);
+    this.shopDebugLabel?.setText(`SHOP_OVERLAY_BOX ${SHOP_OVERLAY_BOX.x},${SHOP_OVERLAY_BOX.y},${SHOP_OVERLAY_BOX.w},${SHOP_OVERLAY_BOX.h} · cấp ${this.shopStage} · − / +`);
+    const stageValue = document.querySelector<HTMLElement>("#shop-stage-debug-value");
+    if (stageValue) stageValue.textContent = `${String(this.debugShopStage).padStart(2, "0")} / ${SHOP_STAGES.length}`;
+  }
+
+  getShopStageForDebug(): number {
+    return this.debugShopStage ?? (this.shopStage > 0 ? this.shopStage : this.store.getSnapshot().cartLevel);
+  }
+
+  stepShopStage(delta: number): void {
+    // The HTML controls can be clicked before Phaser finishes its initial asset
+    // load, so do not rely on create() having set shopDebugEnabled yet.
+    const debugEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).get("debug") === "1";
+    if (!debugEnabled || !Number.isFinite(delta)) return;
+    this.setShopStage(this.getShopStageForDebug() + Math.sign(delta));
   }
 
   private transitionShopStage(stageId: number, animate: boolean): void {
@@ -1587,8 +1758,8 @@ export class NeighborhoodScene extends Phaser.Scene {
     }
 
     this.shopStage = nextStage;
-    this.preloadShopStageImages(nextStage);
     if (!this.shopOverlay) return;
+    this.preloadShopStageImages(nextStage);
     this.tweens.killTweensOf(this.shopOverlay);
     if (!animate || this.shopStage === 0) {
       this.shopOverlay.setAlpha(1);
@@ -1614,7 +1785,7 @@ export class NeighborhoodScene extends Phaser.Scene {
     const stage = SHOP_STAGES[this.shopStage - 1];
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     this.shopStageTitle
-      .setText(`CẤP ${String(stage.id).padStart(2, "0")} / 12 · ${stage.name}`)
+      .setText(`CẤP ${String(stage.id).padStart(2, "0")} / ${SHOP_STAGES.length} · ${stage.name}`)
       .setResolution(dpr);
     this.shopStageAsset
       .setText(`Thiếu ảnh: ${SHOP_STAGE_ASSET_DIRECTORY}/${stage.filename} · 860 × 520 px`)
@@ -1623,23 +1794,250 @@ export class NeighborhoodScene extends Phaser.Scene {
     const textureKey = getShopStageImageKey(stage.id);
     const hasArt = Boolean(stage.image && this.textures.exists(textureKey));
     if (hasArt) {
+      const previousStage = this.displayedShopStage;
+      const displayTextureKey = this.getShopArtworkDisplayTextureKey(stage.id, textureKey);
       if (!this.shopArtwork) {
-        this.shopArtwork = this.add.image(0, 0, textureKey).setOrigin(0).setDepth(0.36);
+        this.shopArtwork = this.add.image(0, 0, displayTextureKey).setOrigin(0).setDepth(0.36);
         this.shopOverlay.add(this.shopArtwork);
+        this.shopArtworkTransition = this.add.image(0, 0, displayTextureKey).setOrigin(0).setDepth(0.37);
+        this.shopArtworkOvercast = this.add.image(0, 0, displayTextureKey).setOrigin(0).setDepth(0.38);
+        this.shopOverlay.add([this.shopArtworkTransition, this.shopArtworkOvercast]);
       } else {
-        this.shopArtwork.setTexture(textureKey);
+        this.shopArtwork.setTexture(displayTextureKey);
+        this.shopArtworkTransition?.setTexture(displayTextureKey);
+        this.shopArtworkOvercast?.setTexture(displayTextureKey);
       }
+      this.displayedShopStage = stage.id;
       this.shopArtwork.setVisible(true);
       this.shopPlaceholder.setVisible(false);
       this.shopPlaceholderFrame.setVisible(false);
       this.shopStageTitle.setVisible(false);
       this.shopStageAsset.setVisible(false);
+      this.layoutShopArtwork();
+      this.updateShopLighting();
+      if (previousStage && previousStage !== stage.id) this.releaseShopArtworkTextures(previousStage);
+      this.syncCookingSteamEmitters();
     } else {
       this.shopArtwork?.setVisible(false);
+      this.shopArtworkTransition?.setVisible(false);
+      this.shopArtworkOvercast?.setVisible(false);
       this.shopPlaceholder.setVisible(true);
       this.shopPlaceholderFrame.setVisible(true);
       this.shopStageTitle.setVisible(true);
       this.shopStageAsset.setVisible(true);
+    }
+  }
+
+  private getShopArtworkDisplayTextureKey(stageId: number, sourceTextureKey: string): string {
+    const displayTextureKey = `shop-stage-overlay-${String(stageId).padStart(2, "0")}-map-roof`;
+    if (this.textures.exists(displayTextureKey)) return displayTextureKey;
+
+    const source = this.textures.get(sourceTextureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    const texture = this.textures.createCanvas(displayTextureKey, source.width, source.height);
+    if (!texture) return sourceTextureKey;
+
+    const facadeStart = SHOP_STAGE_ROOFLINE_Y[stageId] ?? SHOP_OVERLAY_ROOFLINE_Y;
+    const preservedMapHeight = stageId <= 9 ? SHOP_EARLY_STAGE_STORE_FRONT_Y : facadeStart;
+    texture.context.clearRect(0, 0, source.width, source.height);
+    if (stageId === 7) {
+      texture.context.imageSmoothingEnabled = true;
+      texture.context.imageSmoothingQuality = "high";
+      for (let index = 1; index < SHOP_STAGE_07_ALIGNMENT.length; index += 1) {
+        const [sourceLeft, targetLeft] = SHOP_STAGE_07_ALIGNMENT[index - 1];
+        const [sourceRight, targetRight] = SHOP_STAGE_07_ALIGNMENT[index];
+        texture.context.drawImage(
+          source, sourceLeft, 0, sourceRight - sourceLeft, source.height,
+          targetLeft, 0, targetRight - targetLeft, source.height,
+        );
+      }
+    } else {
+      texture.context.drawImage(source, 0, 0);
+    }
+    const artworkTrimBottom = SHOP_STAGE_ARTWORK_TRIM_BOTTOM_Y[stageId];
+    if (artworkTrimBottom !== undefined && artworkTrimBottom < source.height) {
+      texture.context.clearRect(0, artworkTrimBottom, source.width, source.height - artworkTrimBottom);
+    }
+    // The underlying time-of-day map already contains the exact roof, upper
+    // floor, poles, and wires. Keep only that upper area transparent; preserve
+    // every source pixel from the storefront seam down, including both edges.
+    texture.context.clearRect(0, 0, source.width, preservedMapHeight);
+    texture.refresh();
+    return displayTextureKey;
+  }
+
+  private getShopArtworkWarmthMap(textureKey: string, pixels: Uint8ClampedArray, width: number, height: number): Float32Array {
+    const cached = this.shopArtworkWarmthCache.get(textureKey);
+    if (cached) return cached;
+
+    const warmth = new Float32Array(width * height);
+    for (let index = 0; index < warmth.length; index += 1) {
+      const offset = index * 4;
+      if (pixels[offset + 3] === 0) continue;
+      const red = pixels[offset];
+      const green = pixels[offset + 1];
+      const blue = pixels[offset + 2];
+      const orange = Phaser.Math.Clamp((red - green - 35) / 85, 0, 1)
+        * Phaser.Math.Clamp((green - blue - 20) / 65, 0, 1)
+        * Phaser.Math.Clamp((green - 45) / 70, 0, 1);
+      warmth[index] = orange * pixels[offset + 3] / 255;
+    }
+
+    // Spread the glow from lamps and food onto nearby walls and furniture.
+    // A separable box blur is linear in the number of pixels and runs only
+    // when a new stage texture is prepared, never during animation frames.
+    const radius = 26;
+    const horizontal = new Float32Array(warmth.length);
+    const glow = new Float32Array(warmth.length);
+    for (let y = 0; y < height; y += 1) {
+      const row = y * width;
+      let sum = 0;
+      for (let x = 0; x <= Math.min(radius, width - 1); x += 1) sum += warmth[row + x];
+      for (let x = 0; x < width; x += 1) {
+        if (x > 0) {
+          if (x - radius - 1 >= 0) sum -= warmth[row + x - radius - 1];
+          if (x + radius < width) sum += warmth[row + x + radius];
+        }
+        horizontal[row + x] = sum / (Math.min(width - 1, x + radius) - Math.max(0, x - radius) + 1);
+      }
+    }
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      for (let y = 0; y <= Math.min(radius, height - 1); y += 1) sum += horizontal[y * width + x];
+      for (let y = 0; y < height; y += 1) {
+        if (y > 0) {
+          if (y - radius - 1 >= 0) sum -= horizontal[(y - radius - 1) * width + x];
+          if (y + radius < height) sum += horizontal[(y + radius) * width + x];
+        }
+        glow[y * width + x] = Phaser.Math.Clamp(warmth[y * width + x] * 0.35 + sum / (Math.min(height - 1, y + radius) - Math.max(0, y - radius) + 1) * 5, 0, 1);
+      }
+    }
+    this.shopArtworkWarmthCache.set(textureKey, glow);
+    return glow;
+  }
+
+  private getShopArtworkMoodTextureKey(stageId: number, sourceTextureKey: string, mood: StreetMapMood): string {
+    const dayTextureKey = this.getShopArtworkDisplayTextureKey(stageId, sourceTextureKey);
+    if (mood === "day") return dayTextureKey;
+    const textureKey = `${dayTextureKey}-${mood}`;
+    if (this.textures.exists(textureKey)) return textureKey;
+
+    const source = this.textures.get(dayTextureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    const texture = this.textures.createCanvas(textureKey, source.width, source.height);
+    if (!texture) return dayTextureKey;
+    const context = texture.context;
+    context.drawImage(source, 0, 0);
+    const image = context.getImageData(0, 0, source.width, source.height);
+    const pixels = image.data;
+    const glow = this.getShopArtworkWarmthMap(dayTextureKey, pixels, source.width, source.height);
+    const { ambient, lit } = SHOP_LIGHTING_GAINS[mood];
+    for (let index = 0; index < glow.length; index += 1) {
+      const offset = index * 4;
+      if (pixels[offset + 3] === 0) continue;
+      const red = pixels[offset];
+      const green = pixels[offset + 1];
+      const blue = pixels[offset + 2];
+      // Teal shutters, awnings, and green plants receive the map's cool
+      // outdoor light even when a warm lamp is nearby.
+      const coolSurface = green > red * 1.12 && blue > red * 0.78;
+      const lampLight = glow[index] * (coolSurface ? 0.08 : 1);
+      pixels[offset] = Math.min(255, red * (ambient[0] + (lit[0] - ambient[0]) * lampLight));
+      pixels[offset + 1] = Math.min(255, green * (ambient[1] + (lit[1] - ambient[1]) * lampLight));
+      pixels[offset + 2] = Math.min(255, blue * (ambient[2] + (lit[2] - ambient[2]) * lampLight));
+    }
+    context.putImageData(image, 0, 0);
+    texture.refresh();
+    return textureKey;
+  }
+
+  private releaseShopArtworkTextures(stageId: number): void {
+    const dayKey = `shop-stage-overlay-${String(stageId).padStart(2, "0")}-map-roof`;
+    this.shopArtworkWarmthCache.delete(dayKey);
+    for (const textureKey of [dayKey, ...(["dawn", "sunset", "night", "overcast"] as const).map((mood) => `${dayKey}-${mood}`)]) {
+      this.shopArtworkAlphaBoundsCache.delete(textureKey);
+      if (this.textures.exists(textureKey)) this.textures.remove(textureKey);
+    }
+  }
+
+  private updateShopLighting(): void {
+    if (!this.shopArtwork || !this.shopArtworkTransition || !this.shopArtworkOvercast || this.shopStage < 1) return;
+    if (this.displayedShopStage !== this.shopStage) return;
+    const sourceTextureKey = getShopStageImageKey(this.shopStage);
+    if (!this.textures.exists(sourceTextureKey)) return;
+    const { from, to, blend, overcast } = this.shopLightingState;
+    const fromKey = this.getShopArtworkMoodTextureKey(this.shopStage, sourceTextureKey, from);
+    if (this.shopArtwork.texture.key !== fromKey) this.shopArtwork.setTexture(fromKey);
+    if (blend > 0.001) {
+      const toKey = this.getShopArtworkMoodTextureKey(this.shopStage, sourceTextureKey, to);
+      if (this.shopArtworkTransition.texture.key !== toKey) this.shopArtworkTransition.setTexture(toKey);
+      this.shopArtworkTransition.setAlpha(blend).setVisible(true);
+    } else {
+      this.shopArtworkTransition.setVisible(false);
+    }
+    if (overcast > 0.001) {
+      const overcastKey = this.getShopArtworkMoodTextureKey(this.shopStage, sourceTextureKey, "overcast");
+      if (this.shopArtworkOvercast.texture.key !== overcastKey) this.shopArtworkOvercast.setTexture(overcastKey);
+      this.shopArtworkOvercast.setAlpha(overcast).setVisible(true);
+    } else {
+      this.shopArtworkOvercast.setVisible(false);
+    }
+  }
+
+  private getShopArtworkAlphaBounds(textureKey: string): ShopArtworkAlphaBounds {
+    const cached = this.shopArtworkAlphaBoundsCache.get(textureKey);
+    if (cached) return cached;
+
+    const source = this.textures.get(textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    let bounds: ShopArtworkAlphaBounds = { left: 0, top: 0, right: source.width, bottom: source.height };
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = source.width;
+      canvas.height = source.height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (context) {
+        context.drawImage(source, 0, 0);
+        const pixels = context.getImageData(0, 0, source.width, source.height).data;
+        let left = source.width;
+        let top = source.height;
+        let right = 0;
+        let bottom = 0;
+        for (let y = 0; y < source.height; y += 1) {
+          for (let x = 0; x < source.width; x += 1) {
+            if (pixels[(y * source.width + x) * 4 + 3] === 0) continue;
+            if (x < left) left = x;
+            if (x + 1 > right) right = x + 1;
+            if (y < top) top = y;
+            if (y + 1 > bottom) bottom = y + 1;
+          }
+        }
+        if (left < right && top < bottom) bounds = { left, top, right, bottom };
+      }
+    } catch {
+      // If the browser cannot inspect a texture's alpha channel, keep its full canvas.
+    }
+    this.shopArtworkAlphaBoundsCache.set(textureKey, bounds);
+    return bounds;
+  }
+
+  private layoutShopArtwork(): void {
+    if (!this.shopArtwork) return;
+    const textureKey = this.shopArtwork.texture.key;
+    const source = this.textures.get(textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    const bounds = this.getShopArtworkAlphaBounds(textureKey);
+    // Fit this stage's complete, uncut lower artwork to the same shop box.
+    // Using another stage's alpha bounds leaves stage 7 inset and misaligns
+    // its outer column and planter with the shell on the map.
+    const scaleX = SHOP_OVERLAY_BOX.w / Math.max(1, bounds.right - bounds.left);
+    const rooflineY = SHOP_STAGE_ROOFLINE_Y[this.shopStage] ?? SHOP_OVERLAY_ROOFLINE_Y;
+    const scaleY = (SHOP_OVERLAY_BOX.h - SHOP_OVERLAY_ROOFLINE_Y) / Math.max(1, bounds.bottom - rooflineY);
+    const offsetX = -bounds.left * scaleX;
+    const offsetY = SHOP_OVERLAY_ROOFLINE_Y - rooflineY * scaleY;
+    this.shopArtworkTransform = { offsetX, offsetY, scaleX, scaleY };
+    for (const artwork of [this.shopArtwork, this.shopArtworkTransition, this.shopArtworkOvercast]) {
+      artwork?.setPosition(offsetX * this.shopOverlayScale, offsetY * this.shopOverlayScale)
+        .setDisplaySize(
+          source.width * scaleX * this.shopOverlayScale,
+          source.height * scaleY * this.shopOverlayScale,
+        );
     }
   }
 
@@ -1651,9 +2049,6 @@ export class NeighborhoodScene extends Phaser.Scene {
 
     for (const [index, walker] of this.walkers.entries()) {
       if (!walker.active) continue;
-      const camera = this.cameras.main;
-      const viewportLeft = camera.scrollX;
-      const viewportRight = viewportLeft + this.getLogicalWidth();
       const isPet = walker.textureKey === "walk-street-cat";
       const laneY = this.getWalkerLaneY(walker.lane) + Math.sin(index * 1.9) * 2 * this.unit;
       if (isPet) {
@@ -1676,9 +2071,13 @@ export class NeighborhoodScene extends Phaser.Scene {
       // the leg motion, so an extra high-frequency bob only makes sprites jitter.
       walker.sprite.y = laneY;
       walker.sprite.setDepth(getStreetCharacterDepth(walker.sprite.y));
-      const leftViewport = walker.direction < 0 && walker.sprite.x < viewportLeft - 60 * this.unit;
-      const rightViewport = walker.direction > 0 && walker.sprite.x > viewportRight + 60 * this.unit;
-      if (leftViewport || rightViewport) {
+      walker.positionRatio = walker.sprite.x / width;
+      // Recycle at the panorama edges, not at the camera edges. Viewport-based
+      // recycling made walkers vanish while the player dragged across the map.
+      const mapMargin = 60 * this.unit;
+      const leftMapEdge = walker.direction < 0 && walker.sprite.x < -mapMargin;
+      const rightMapEdge = walker.direction > 0 && walker.sprite.x > width + mapMargin;
+      if (leftMapEdge || rightMapEdge) {
         walker.active = false;
         walker.sprite.setVisible(false);
         walker.shadow.setVisible(false);
@@ -1706,14 +2105,12 @@ export class NeighborhoodScene extends Phaser.Scene {
       const walkerIndex = this.walkerSpawnQueue.shift()!;
       const walker = this.walkers[walkerIndex];
       if (walker) {
-        const camera = this.cameras.main;
-        const viewportLeft = camera.scrollX;
-        const viewportRight = viewportLeft + this.getLogicalWidth();
         const spawnX = walker.direction > 0
-          ? viewportLeft - 60 * this.unit
-          : viewportRight + 60 * this.unit;
+          ? -60 * this.unit
+          : width + 60 * this.unit;
         const animation = `${walker.textureKey}-${walker.direction > 0 ? "right" : "left"}`;
         walker.active = true;
+        walker.positionRatio = spawnX / width;
         if (walker.petMode) {
           walker.petMode = "walking";
           walker.petNextPauseAt = _time + 5_500 + (walkerIndex % 2) * 4_000;
@@ -1796,17 +2193,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       }
     }
 
-    for (let index = this.steamPuffs.length - 1; index >= 0; index -= 1) {
-      const steam = this.steamPuffs[index];
-      steam.life -= delta;
-      steam.puff.y -= steam.speed * elapsed;
-      steam.puff.alpha = Math.max(0, steam.life / 1_250) * 0.38;
-      steam.puff.setScale(steam.puff.scaleX + elapsed * 0.22, steam.puff.scaleY + elapsed * 0.22);
-      if (steam.life <= 0) {
-        steam.puff.destroy();
-        this.steamPuffs.splice(index, 1);
-      }
-    }
+    this.updateCookingSteam(delta);
   }
 
   private startPetPause(walker: Walker, now: number): void {
@@ -1859,7 +2246,7 @@ export class NeighborhoodScene extends Phaser.Scene {
           getWalkerFrameHeight(textureKey),
           96,
         );
-      const footprint = WALKER_FOOTPRINTS[textureKey] ?? { width: 60, height: 96, shadowWidth: 34, shadowHeight: 9 };
+      const footprint = WALKER_FOOTPRINTS[textureKey] ?? { width: 60, height: 96, shadowWidth: 42, shadowHeight: 12 };
       const positionRatio = textureKey === "walk-street-cat"
         ? 0.43
         : ((index % MAX_ACTIVE_AMBIENT_WALKERS) + 0.5) / MAX_ACTIVE_AMBIENT_WALKERS;
@@ -1868,7 +2255,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       const shadow = this.add.image(positionRatio * width, laneY + 1.5 * this.unit, "character-contact-shadow-soft")
         .setOrigin(0.5)
         .setDepth(getStreetCharacterDepth(laneY) - 0.02)
-        .setAlpha(isPet ? 0.34 : 0.56)
+        .setAlpha(isPet ? 0.48 : 0.8)
         .setVisible(active);
       const sprite = this.add.sprite(positionRatio * width, laneY, textureKey, getWalkerStartFrame(textureKey, direction))
         .setOrigin(0.5, getWalkerOriginY(textureKey))
@@ -1911,14 +2298,64 @@ export class NeighborhoodScene extends Phaser.Scene {
     context.translate(48, 14);
     context.scale(1, 0.22);
     const gradient = context.createRadialGradient(0, 0, 2, 0, 0, 44);
-    gradient.addColorStop(0, "rgba(35, 28, 22, 0.36)");
-    gradient.addColorStop(0.42, "rgba(35, 28, 22, 0.21)");
-    gradient.addColorStop(0.76, "rgba(35, 28, 22, 0.07)");
+    gradient.addColorStop(0, "rgba(30, 23, 18, 0.48)");
+    gradient.addColorStop(0.42, "rgba(30, 23, 18, 0.30)");
+    gradient.addColorStop(0.76, "rgba(30, 23, 18, 0.10)");
     gradient.addColorStop(1, "rgba(33, 25, 18, 0)");
     context.fillStyle = gradient;
     context.beginPath();
     context.arc(0, 0, 44, 0, Math.PI * 2);
     context.fill();
+    context.restore();
+    texture.refresh();
+  }
+
+  private createCookingSteamTexture(): void {
+    const textureKey = "cooking-steam-soft";
+    if (this.textures.exists(textureKey)) return;
+    const width = 30;
+    const height = 54;
+    const texture = this.textures.createCanvas(textureKey, width, height);
+    if (!texture) return;
+
+    const { context } = texture;
+    context.clearRect(0, 0, width, height);
+    // Thin, uneven vapor threads read as rising heat from cookware. Avoid a
+    // blurred, solid plume: that looked detached from the pots and food.
+    const vapor = context.createLinearGradient(0, height, 0, 0);
+    vapor.addColorStop(0, "rgba(246, 238, 218, 0.03)");
+    vapor.addColorStop(0.18, "rgba(246, 238, 218, 0.27)");
+    vapor.addColorStop(0.56, "rgba(237, 235, 225, 0.20)");
+    vapor.addColorStop(0.86, "rgba(237, 235, 225, 0.08)");
+    vapor.addColorStop(1, "rgba(237, 235, 225, 0)");
+    context.save();
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.strokeStyle = vapor;
+    context.lineWidth = 2.7;
+    context.beginPath();
+    context.moveTo(12, 52);
+    context.bezierCurveTo(8, 46, 16, 40, 12, 34);
+    context.bezierCurveTo(9, 29, 16, 25, 14, 19);
+    context.bezierCurveTo(12, 14, 18, 10, 17, 4);
+    context.stroke();
+
+    context.globalAlpha = 0.72;
+    context.lineWidth = 1.9;
+    context.beginPath();
+    context.moveTo(18, 53);
+    context.bezierCurveTo(23, 47, 16, 42, 20, 36);
+    context.bezierCurveTo(24, 30, 17, 25, 21, 20);
+    context.bezierCurveTo(24, 15, 21, 10, 24, 6);
+    context.stroke();
+
+    context.globalAlpha = 0.48;
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.moveTo(7, 51);
+    context.bezierCurveTo(4, 47, 9, 44, 7, 40);
+    context.bezierCurveTo(5, 36, 9, 33, 8, 29);
+    context.stroke();
     context.restore();
     texture.refresh();
   }
@@ -2036,13 +2473,6 @@ export class NeighborhoodScene extends Phaser.Scene {
       this.plants.push(plant);
     }
 
-    this.pigeonNest = this.add.image(0, 0, "pigeon-nest")
-      .setDepth(2.92).setOrigin(0.5).setScrollFactor(1);
-    this.pigeonEggs = [
-      this.add.image(0, 0, "pigeon-egg-01").setDepth(2.94).setOrigin(0.5).setScrollFactor(1).setTint(0xd7ad78),
-      this.add.image(0, 0, "pigeon-egg-03").setDepth(2.95).setOrigin(0.5).setScrollFactor(1).setTint(0x8294aa),
-    ];
-
     for (let index = 0; index < LEAF_COUNT; index += 1) {
       const frame = index % 3 === 0 ? (index * 3) % 8 : 8 + (index * 5) % 8;
       const sprite = this.add.sprite(0, 0, "foliage-atlas", frame)
@@ -2097,6 +2527,8 @@ export class NeighborhoodScene extends Phaser.Scene {
     // map remains visible underneath, so weather does not erase sunset or night.
     const overcastAmount = this.smoothStep(0.2, 0.86, cloudCover) * daylight * 0.9;
     this.streetOvercast.setAlpha(overcastAmount).setVisible(overcastAmount > 0.001);
+    this.shopLightingState = { from: fromMood, to: toMood, blend: transition, overcast: overcastAmount };
+    this.updateShopLighting();
 
     const backdropMood = overcastAmount > 0.45 ? "overcast" : transition > 0.5 ? toMood : fromMood;
     const backdropTexture = STREET_MAP_TEXTURES[backdropMood];
@@ -2152,8 +2584,6 @@ export class NeighborhoodScene extends Phaser.Scene {
     });
 
     this.updatePigeons(elapsed, daylight, weather.rain, mapWidth);
-    this.pigeonNest.setAlpha(0.78 + night * 0.12);
-    this.pigeonEggs.forEach((egg) => egg.setAlpha(1));
 
     this.plants.forEach((plant, index) => {
       const gustPulse = (Math.sin(time / (1_650 + index * 170) + index * 1.8) + 1) / 2;
@@ -2242,8 +2672,9 @@ export class NeighborhoodScene extends Phaser.Scene {
       const clockHours = Math.floor(phase * 24) % 24;
       const clockMinutes = Math.floor((phase * 24 * 60) % 60 / 5) * 5;
       const clockText = `${clockHours.toString().padStart(2, "0")}:${clockMinutes.toString().padStart(2, "0")}`;
-      const badge = document.querySelector<HTMLElement>("#weather-label");
-      if (badge) badge.textContent = `${weather.icon} ${clockText} · ${weather.label} · Sài Gòn`;
+      const weatherCopy = document.querySelector<HTMLElement>("#weather-copy");
+      if (weatherCopy) weatherCopy.textContent = `${clockText} · ${weather.label} · Sài Gòn`;
+      setIcon(document.querySelector("#weather-icon"), weather.icon);
     }
   }
 
@@ -2322,9 +2753,9 @@ export class NeighborhoodScene extends Phaser.Scene {
   }
 
   private getWeatherState(seconds: number): WeatherState {
-    if (this.debugWeather === "clear") return { cloudCover: 0.12, rain: 0, wind: 0.18, label: "Nắng nhẹ", icon: "☀️" };
-    if (this.debugWeather === "cloudy") return { cloudCover: 0.82, rain: 0, wind: 0.36, label: "Mây che nắng", icon: "☁️" };
-    if (this.debugWeather === "rain") return { cloudCover: 0.92, rain: 0.86, wind: 0.72, label: "Mưa rào", icon: "🌧️" };
+    if (this.debugWeather === "clear") return { cloudCover: 0.12, rain: 0, wind: 0.18, label: "Nắng nhẹ", icon: "sun" };
+    if (this.debugWeather === "cloudy") return { cloudCover: 0.82, rain: 0, wind: 0.36, label: "Mây che nắng", icon: "cloud" };
+    if (this.debugWeather === "rain") return { cloudCover: 0.92, rain: 0.86, wind: 0.72, label: "Mưa rào", icon: "rain" };
 
     const cycle = (seconds * 1_000 % WEATHER_CYCLE_MS) / WEATHER_CYCLE_MS;
     const overcast = this.smoothStep(0.48, 0.60, cycle) * (1 - this.smoothStep(0.75, 0.84, cycle));
@@ -2332,9 +2763,9 @@ export class NeighborhoodScene extends Phaser.Scene {
     const gustWindow = this.smoothStep(0.64, 0.72, cycle) * (1 - this.smoothStep(0.91, 0.98, cycle));
     const cloudCover = 0.12 + overcast * 0.66 + rainyWindow * 0.18;
     const wind = 0.15 + gustWindow * 0.5 + rainyWindow * 0.28;
-    if (rainyWindow > 0.08) return { cloudCover, rain: rainyWindow * 0.86, wind, label: "Mưa rào", icon: "🌧️" };
-    if (overcast > 0.56) return { cloudCover, rain: 0, wind, label: gustWindow > 0.12 ? "Gió lay hàng me" : "Mây che nắng", icon: gustWindow > 0.12 ? "🍃" : "☁️" };
-    return { cloudCover, rain: 0, wind, label: gustWindow > 0.15 ? "Gió nhẹ" : "Nắng nhẹ", icon: "☀️" };
+    if (rainyWindow > 0.08) return { cloudCover, rain: rainyWindow * 0.86, wind, label: "Mưa rào", icon: "rain" };
+    if (overcast > 0.56) return { cloudCover, rain: 0, wind, label: gustWindow > 0.12 ? "Gió lay hàng me" : "Mây che nắng", icon: gustWindow > 0.12 ? "leaf" : "cloud" };
+    return { cloudCover, rain: 0, wind, label: gustWindow > 0.15 ? "Gió nhẹ" : "Nắng nhẹ", icon: "sun" };
   }
 
   private smoothStep(edge0: number, edge1: number, value: number): number {
@@ -2342,13 +2773,101 @@ export class NeighborhoodScene extends Phaser.Scene {
     return t * t * (3 - 2 * t);
   }
 
-  private emitSteam(): void {
-    if (!this.cartWidth || !this.lastSnapshot) return;
-    const x = this.cartX + this.cartWidth * (0.05 + Math.random() * 0.28);
-    const y = this.groundY - this.cartHeight * 0.22;
-    const puff = this.add.ellipse(x, y, 5 * this.unit, 4 * this.unit, 0xfff4d8, 0.36)
-      .setDepth(4.5);
-    this.steamPuffs.push({ puff, life: 1_250, speed: 24 * this.unit });
+  private syncCookingSteamEmitters(): void {
+    if (!this.shopOverlay || !this.mapHeight) return;
+    const sourceScale = this.shopOverlayScale;
+    const signature = [
+      this.shopStage,
+      this.shopOverlay.x,
+      this.shopOverlay.y,
+      sourceScale,
+      this.shopArtworkTransform.offsetX,
+      this.shopArtworkTransform.offsetY,
+      this.shopArtworkTransform.scaleX,
+      this.shopArtworkTransform.scaleY,
+    ].join(":");
+    if (signature === this.steamEmitterSignature) return;
+    this.steamEmitterSignature = signature;
+
+    const points = [
+      ...STREET_COOKING_STEAM_POINTS.map((point) => ({
+        ...point,
+        x: point.x * sourceScale,
+        y: this.mapTop + point.y * sourceScale,
+      })),
+      ...(SHOP_COOKING_STEAM_POINTS[this.shopStage] ?? []).map((point) => ({
+        ...point,
+        x: this.shopOverlay.x + (this.shopArtworkTransform.offsetX + point.x * this.shopArtworkTransform.scaleX) * sourceScale,
+        y: this.shopOverlay.y + (this.shopArtworkTransform.offsetY + point.y * this.shopArtworkTransform.scaleY) * sourceScale,
+      })),
+    ];
+
+    this.steamEmitters = points.map((point) => {
+      const intervalMs = point.intervalMs ?? 1_900;
+      return {
+        x: point.x,
+        y: point.y,
+        size: point.size ?? 1,
+        intervalMs,
+        cooldownMs: Math.random() * intervalMs,
+        sourceScale,
+      };
+    });
+  }
+
+  private emitSteam(emitter: SteamEmitter): void {
+    const sprite = this.add.image(
+      emitter.x + Phaser.Math.Between(-1, 1) * emitter.sourceScale,
+      emitter.y,
+      "cooking-steam-soft",
+    )
+      .setOrigin(0.5, 1)
+      .setDepth(COOKING_STEAM_DEPTH)
+      .setTint(0xf4efdf);
+    const width = 30 * emitter.sourceScale * emitter.size;
+    const height = 54 * emitter.sourceScale * emitter.size;
+    sprite.setDisplaySize(width, height);
+
+    this.steamPuffs.push({
+      sprite,
+      life: 1_450,
+      duration: 1_450,
+      originX: sprite.x,
+      originY: emitter.y,
+      rise: Phaser.Math.Between(22, 29) * emitter.sourceScale * emitter.size,
+      drift: Phaser.Math.Between(2, 5) * emitter.sourceScale * emitter.size,
+      phase: Math.random() * Math.PI * 2,
+      baseScaleX: sprite.scaleX,
+      baseScaleY: sprite.scaleY,
+    });
+  }
+
+  private updateCookingSteam(delta: number): void {
+    this.steamEmitters.forEach((emitter) => {
+      emitter.cooldownMs -= delta;
+      if (emitter.cooldownMs <= 0) {
+        this.emitSteam(emitter);
+        emitter.cooldownMs = emitter.intervalMs + Phaser.Math.Between(-260, 260);
+      }
+    });
+
+    for (let index = this.steamPuffs.length - 1; index >= 0; index -= 1) {
+      const steam = this.steamPuffs[index];
+      steam.life -= delta;
+      const progress = Phaser.Math.Clamp(1 - steam.life / steam.duration, 0, 1);
+      const fade = Math.sin(progress * Math.PI) * 0.38;
+      steam.sprite
+        .setPosition(
+          steam.originX + Math.sin(progress * 2.8 + steam.phase) * steam.drift,
+          steam.originY - steam.rise * progress,
+        )
+        .setScale(steam.baseScaleX * (0.9 + progress * 0.12), steam.baseScaleY * (0.9 + progress * 0.12))
+        .setAlpha(fade);
+      if (steam.life <= 0) {
+        steam.sprite.destroy();
+        this.steamPuffs.splice(index, 1);
+      }
+    }
   }
 
   private layout(): void {
@@ -2362,18 +2881,32 @@ export class NeighborhoodScene extends Phaser.Scene {
     const portrait = width / height < 0.85;
     // Keep the storefront large enough to read on phones while preserving a
     // continuous 3:1 street panorama that can be explored with a horizontal drag.
-    const mapHeight = portrait
+    const gameplayMapHeight = portrait
       ? Math.min(height * 0.78, width * 1.45)
       : height;
+    // The debug stage picker is also an asset preview. Fit the entire shop box
+    // between the top HUD and bottom controls on every aspect ratio.
+    const debugTopInset = this.shopDebugEnabled ? Math.min(88, height * 0.2) : 0;
+    const debugBottomInset = this.shopDebugEnabled ? Math.min(128, height * 0.29) : 0;
+    const debugAvailableHeight = Math.max(1, height - debugTopInset - debugBottomInset);
+    const debugPreviewMapHeight = this.shopDebugEnabled
+      ? Math.min(
+        width * (SHOP_BASE_SIZE.height / SHOP_OVERLAY_BOX.w) * 0.92,
+        debugAvailableHeight * (SHOP_BASE_SIZE.height / SHOP_OVERLAY_BOX.h),
+      )
+      : gameplayMapHeight;
+    const mapHeight = Math.min(gameplayMapHeight, debugPreviewMapHeight);
     const mapWidth = mapHeight * 3;
-    const mapTop = (height - mapHeight) / 2;
+    const sourceScale = mapHeight / SHOP_BASE_SIZE.height;
+    const overlayHeight = SHOP_OVERLAY_BOX.h * sourceScale;
+    const mapTop = this.shopDebugEnabled
+      ? debugTopInset + (debugAvailableHeight - overlayHeight) / 2
+      : (height - mapHeight) / 2;
     // Place character feet on the lower half of the map's tiled sidewalk, above the curb.
     const groundY = mapTop + mapHeight * 0.80;
-    const sourceScale = mapHeight / SHOP_BASE_SIZE.height;
-    const overlayX = Math.round(SHOP_OVERLAY_BOX.x * sourceScale);
-    const overlayY = Math.round(mapTop + SHOP_OVERLAY_BOX.y * sourceScale);
-    const overlayWidth = Math.round(SHOP_OVERLAY_BOX.w * sourceScale);
-    const overlayHeight = Math.round(SHOP_OVERLAY_BOX.h * sourceScale);
+    const overlayX = SHOP_OVERLAY_BOX.x * sourceScale;
+    const overlayY = mapTop + SHOP_OVERLAY_BOX.y * sourceScale;
+    const overlayWidth = SHOP_OVERLAY_BOX.w * sourceScale;
     const centerX = overlayX + overlayWidth / 2;
     // Keep interactive props at a readable game scale as the panoramic backdrop
     // grows to cover a full-screen viewport.
@@ -2414,13 +2947,15 @@ export class NeighborhoodScene extends Phaser.Scene {
       .setFontSize(Math.max(10, Math.round(16 * sourceScale)))
       .setResolution(devicePixelRatio);
     this.shopOverlayScale = sourceScale;
-    this.shopArtwork?.setPosition(0, 0).setScale(this.shopOverlayScale);
+    this.layoutShopArtwork();
+    this.syncCookingSteamEmitters();
+    this.layoutPlayerOwner(centerX, mapTop + mapHeight * OWNER_MAP_Y_RATIO, unit);
     if (this.shopDebugFrame && this.shopDebugLabel) {
       this.shopDebugFrame.clear()
         .lineStyle(Math.max(2, Math.round(3 * sourceScale)), 0xff3f4f, 1)
         .strokeRect(overlayX, overlayY, overlayWidth, overlayHeight);
       this.shopDebugLabel
-        .setText(`SHOP_OVERLAY_BOX ${SHOP_OVERLAY_BOX.x},${SHOP_OVERLAY_BOX.y},${SHOP_OVERLAY_BOX.w},${SHOP_OVERLAY_BOX.h} · cấp ${this.shopStage} · [ ]`)
+        .setText(`SHOP_OVERLAY_BOX ${SHOP_OVERLAY_BOX.x},${SHOP_OVERLAY_BOX.y},${SHOP_OVERLAY_BOX.w},${SHOP_OVERLAY_BOX.h} · cấp ${this.shopStage} · − / +`)
         .setPosition(overlayX + 8, overlayY + 8)
         .setFontSize(Math.max(10, Math.round(13 * sourceScale)))
         .setResolution(devicePixelRatio);
@@ -2433,13 +2968,18 @@ export class NeighborhoodScene extends Phaser.Scene {
       || mapHeight !== previousMapHeight
       || mapTop !== previousMapTop;
     if (resized) {
-      const oldCenterX = this.layoutWidth ? this.cameras.main.scrollX + this.layoutWidth / 2 : mapWidth / 2;
+      const camera = this.cameras.main;
+      // Preserve normal gameplay's visible world center when the canvas resizes.
+      // In debug preview, recenter on the full shop every time: the preview fits
+      // the whole overlay to the viewport and must not inherit an old pan offset.
+      const oldCenterX = this.layoutWidth ? camera.scrollX + this.cameraDisplayWidth / 2 : mapWidth / 2;
       this.layoutWidth = width;
       this.layoutHeight = height;
       this.mapWidth = mapWidth;
-      this.maxPanX = Math.max(0, mapWidth - width);
-      this.cameras.main.setBounds(0, 0, mapWidth, height, false);
-      this.cameras.main.setScroll(Phaser.Math.Clamp(oldCenterX - width / 2, 0, this.maxPanX), 0);
+      camera.setBounds(0, 0, mapWidth, height, false);
+      const targetCenterX = this.shopDebugEnabled ? centerX : oldCenterX;
+      camera.setScroll(camera.clampX(targetCenterX - camera.displayWidth / 2), 0);
+      this.cameraDisplayWidth = camera.displayWidth;
       this.walkers.forEach((walker) => {
         walker.sprite.x = walker.positionRatio * mapWidth;
       });
@@ -2497,13 +3037,6 @@ export class NeighborhoodScene extends Phaser.Scene {
       pigeon.sprite.setPosition(pigeon.x, pigeon.y).setDisplaySize(pigeon.width * unit, pigeon.height * unit);
       pigeon.shadow.setPosition(pigeon.x, pigeon.y + 1.5 * unit).setDisplaySize(pigeon.width * unit * 0.54, 5 * unit);
     });
-    const nestX = mapWidth * 0.875;
-    const nestY = mapTop + mapHeight * 0.215;
-    this.pigeonNest.setPosition(nestX, nestY).setDisplaySize(34 * unit, 34 * unit);
-    this.pigeonEggs.forEach((egg, index) => {
-      egg.setPosition(nestX + (index === 0 ? -4 : 4) * unit, nestY - 5 * unit)
-        .setDisplaySize(10 * unit, 10 * unit);
-    });
     this.leaves.forEach((leaf, index) => {
       const laneCycle = ((index * 17) % LEAF_COUNT) / LEAF_COUNT;
       const facadeCycle = ((index * 13) % LEAF_COUNT) / LEAF_COUNT;
@@ -2519,17 +3052,15 @@ export class NeighborhoodScene extends Phaser.Scene {
 
   centerOnShop(): void {
     if (!this.mapWidth) return;
-    const desired = this.cartX - this.getLogicalWidth() / 2;
-    this.cameras.main.setScroll(Phaser.Math.Clamp(desired, 0, this.maxPanX), 0);
+    const camera = this.cameras.main;
+    camera.setScroll(camera.clampX(this.cartX - camera.displayWidth / 2), 0);
   }
 
   panMap(direction: -1 | 1): void {
     if (!this.mapWidth) return;
     const distance = Math.max(this.getLogicalWidth() * 0.72, 220 * this.unit);
-    this.cameras.main.setScroll(
-      Phaser.Math.Clamp(this.cameras.main.scrollX + direction * distance, 0, this.maxPanX),
-      0,
-    );
+    const camera = this.cameras.main;
+    camera.setScroll(camera.clampX(camera.scrollX + direction * distance), 0);
   }
 
   private getCustomerAppearance(type: CustomerType, id: number): CustomerAppearance {
@@ -2600,8 +3131,8 @@ export class NeighborhoodScene extends Phaser.Scene {
 
       if (!container) {
         const shadow = this.add.image(0, 1.5 * unit, "character-contact-shadow-soft")
-          .setDisplaySize(31 * unit, 8 * unit)
-          .setAlpha(0.58);
+          .setDisplaySize(38 * unit, 11 * unit)
+          .setAlpha(0.8);
         const sprite = this.add.sprite(0, 0, walkKey, getWalkerStartFrame(walkKey, 1)).setOrigin(0.5, getWalkerOriginY(walkKey));
         const label = this.add.text(0, -92 * unit, appearance.shortName, {
           fontFamily: "Trebuchet MS, sans-serif",
@@ -2645,7 +3176,7 @@ export class NeighborhoodScene extends Phaser.Scene {
       const sprite = container.getAt(1) as Phaser.GameObjects.Sprite;
       const label = container.getAt(2) as Phaser.GameObjects.Text;
       const orderTag = container.getAt(3) as Phaser.GameObjects.Text;
-      shadow.setDisplaySize(31 * unit, 8 * unit).setPosition(0, 1.5 * unit);
+      shadow.setDisplaySize(38 * unit, 11 * unit).setPosition(0, 1.5 * unit);
       sprite.setDisplaySize(CUSTOMER_DISPLAY_WIDTH * unit, CUSTOMER_DISPLAY_HEIGHT * unit);
       label.setY(-92 * unit).setFontSize(`${Math.max(9, 10 * unit)}px`).setText(appearance.shortName);
       orderTag.setY(-108 * unit).setFontSize(`${Math.max(8, 9 * unit)}px`).setText(recipe.name);
